@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['host.docker.internal:9101']
+
+  - job_name: 'employee-service'
+    static_configs:
+      - targets: ['host.docker.internal:9102']
+
+  - job_name: 'attendance-service'
+    static_configs:
+      - targets: ['host.docker.internal:9103']
+
+  - job_name: 'leave-service'
+    static_configs:
+      - targets: ['host.docker.internal:9104']
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['host.docker.internal:9105']
+
+  - job_name: 'audit-service'
+    static_configs:
+      - targets: ['host.docker.internal:9106']
+
+  - job_name: 'ai-service'
+    static_configs:
+      - targets: ['host.docker.internal:9107']
+
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: '/metrics'
+
+  - job_name: 'pgbouncer'
+    static_configs:
+      - targets: ['host.docker.internal:9127']

@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package hris.auth.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/auth/v1;authv1";
+
+// ─── Messages ────────────────────────────────────────────────────────────────
+
+message LoginRequest {
+  string email    = 1;
+  string password = 2;
+  // tenant_slug identifies which tenant the user belongs to.
+  // Required to disambiguate users with the same email across tenants.
+  string tenant_slug = 3;
+}
+
+message LoginResponse {
+  string access_token  = 1;
+  string refresh_token = 2;
+  // access_token TTL in seconds (typically 900 = 15 minutes).
+  int32 expires_in = 3;
+  TokenClaims claims = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token  = 1;
+  string refresh_token = 2;
+  int32 expires_in = 3;
+  TokenClaims claims = 4;
+}
+
+message ValidateTokenRequest {
+  string access_token = 1;
+}
+
+message ValidateTokenResponse {
+  TokenClaims claims = 1;
+}
+
+message RevokeTokenRequest {
+  string refresh_token = 1;
+}
+
+message RevokeTokenResponse {}
+
+message TokenClaims {
+  string user_id   = 1;
+  string tenant_id = 2;
+  string email     = 3;
+  // roles contains the user's assigned roles within their tenant.
+  // e.g. ["hr_admin", "manager"]
+  repeated string roles = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message GetPermissionsRequest {
+  string user_id   = 1;
+  string tenant_id = 2;
+}
+
+message GetPermissionsResponse {
+  repeated string permissions = 1;
+}
+
+message RegisterTenantRequest {
+  string company_name  = 1;
+  string tenant_slug   = 2;  // URL-safe, unique identifier
+  string admin_email   = 3;
+  string admin_password = 4;
+  string admin_name    = 5;
+}
+
+message RegisterTenantResponse {
+  string tenant_id = 1;
+  string user_id   = 2;
+  // Returns a login token so the admin can proceed immediately.
+  string access_token  = 3;
+  string refresh_token = 4;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service AuthService {
+  // Login authenticates a user and returns JWT access + refresh tokens.
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // RefreshToken exchanges a valid refresh token for a new access token.
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/refresh"
+      body: "*"
+    };
+  }
+
+  // ValidateToken verifies an access token and returns its claims.
+  // Called by other services to validate inbound tokens.
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/validate"
+      body: "*"
+    };
+  }
+
+  // RevokeToken invalidates a refresh token (logout).
+  rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/revoke"
+      body: "*"
+    };
+  }
+
+  // GetPermissions returns the full permission list for a user.
+  rpc GetPermissions(GetPermissionsRequest) returns (GetPermissionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/auth/permissions/{user_id}"
+    };
+  }
+
+  // RegisterTenant creates a new tenant and its first admin user.
+  rpc RegisterTenant(RegisterTenantRequest) returns (RegisterTenantResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/register"
+      body: "*"
+    };
+  }
+}

@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package hris.notification.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/notification/v1;notificationv1";
+
+enum NotificationChannel {
+  NOTIFICATION_CHANNEL_UNSPECIFIED = 0;
+  NOTIFICATION_CHANNEL_EMAIL       = 1;
+  NOTIFICATION_CHANNEL_IN_APP      = 2;
+  NOTIFICATION_CHANNEL_WHATSAPP    = 3;  // Phase 2
+  NOTIFICATION_CHANNEL_PUSH        = 4;  // Phase 2
+}
+
+enum DeliveryStatus {
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  DELIVERY_STATUS_PENDING     = 1;
+  DELIVERY_STATUS_SENT        = 2;
+  DELIVERY_STATUS_FAILED      = 3;
+  DELIVERY_STATUS_READ        = 4;
+}
+
+message Notification {
+  string id          = 1;
+  string tenant_id   = 2;
+  string recipient_id = 3;  // employee_id
+
+  NotificationChannel channel = 4;
+  string template_key = 5;  // e.g. "leave.approved"
+  map<string, string> variables = 6;  // template substitution values
+
+  string subject = 7;  // rendered subject line
+  string body    = 8;  // rendered body
+
+  DeliveryStatus status = 9;
+  string error_message  = 10;
+
+  google.protobuf.Timestamp scheduled_at = 11;
+  google.protobuf.Timestamp sent_at      = 12;
+  google.protobuf.Timestamp read_at      = 13;
+  google.protobuf.Timestamp created_at   = 14;
+}
+
+message SendNotificationRequest {
+  string tenant_id    = 1;
+  string recipient_id = 2;
+
+  // Either use a template_key + variables, or supply subject/body directly.
+  string template_key             = 3;
+  map<string, string> variables   = 4;
+
+  // Direct content (used when template_key is empty)
+  string subject = 5;
+  string body    = 6;
+
+  repeated NotificationChannel channels = 7;  // which channels to send on
+}
+
+message SendNotificationResponse {
+  repeated DeliveryReceipt receipts = 1;
+}
+
+message DeliveryReceipt {
+  string              notification_id = 1;
+  NotificationChannel channel         = 2;
+  DeliveryStatus      status          = 3;
+}
+
+message GetDeliveryStatusRequest {
+  string notification_id = 1;
+  string tenant_id       = 2;
+}
+
+message GetDeliveryStatusResponse {
+  Notification notification = 1;
+}
+
+message UpdateChannelConfigRequest {
+  string tenant_id = 1;
+  NotificationChannel channel = 2;
+  bool enabled = 3;
+  map<string, string> config = 4;  // channel-specific settings
+}
+
+message UpdateChannelConfigResponse {
+  bool success = 1;
+}
+
+message ListNotificationsRequest {
+  string tenant_id    = 1;
+  string recipient_id = 2;
+  bool   unread_only  = 3;
+  int32  page_size    = 4;
+  string page_token   = 5;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  string next_page_token              = 2;
+  int32  unread_count                 = 3;
+}
+
+message MarkReadRequest {
+  string tenant_id    = 1;
+  string recipient_id = 2;
+  repeated string notification_ids = 3;  // empty = mark all as read
+}
+
+message MarkReadResponse {
+  int32 updated_count = 1;
+}
+
+service NotificationService {
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse) {
+    option (google.api.http) = {
+      post: "/v1/notifications/send"
+      body: "*"
+    };
+  }
+
+  rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (GetDeliveryStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/notifications/{notification_id}"
+    };
+  }
+
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse) {
+    option (google.api.http) = {
+      get: "/v1/notifications"
+    };
+  }
+
+  rpc MarkRead(MarkReadRequest) returns (MarkReadResponse) {
+    option (google.api.http) = {
+      post: "/v1/notifications/mark-read"
+      body: "*"
+    };
+  }
+
+  rpc UpdateChannelConfig(UpdateChannelConfigRequest) returns (UpdateChannelConfigResponse) {
+    option (google.api.http) = {
+      put: "/v1/notifications/channel-config"
+      body: "*"
+    };
+  }
+}

@@ -1,0 +1,291 @@
+syntax = "proto3";
+
+package hris.employee.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/employee/v1;employeev1";
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum EmploymentStatus {
+  EMPLOYMENT_STATUS_UNSPECIFIED = 0;
+  EMPLOYMENT_STATUS_ACTIVE      = 1;
+  EMPLOYMENT_STATUS_INACTIVE    = 2;
+  EMPLOYMENT_STATUS_TERMINATED  = 3;
+  EMPLOYMENT_STATUS_ON_LEAVE    = 4;
+}
+
+enum ContractType {
+  CONTRACT_TYPE_UNSPECIFIED = 0;
+  CONTRACT_TYPE_PERMANENT   = 1;  // PKWTT
+  CONTRACT_TYPE_FIXED_TERM  = 2;  // PKWT
+  CONTRACT_TYPE_FREELANCE   = 3;
+  CONTRACT_TYPE_INTERN      = 4;
+}
+
+enum Gender {
+  GENDER_UNSPECIFIED = 0;
+  GENDER_MALE        = 1;
+  GENDER_FEMALE      = 2;
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
+
+message Employee {
+  string id        = 1;
+  string tenant_id = 2;
+
+  // Personal information
+  string employee_number = 3;  // e.g. "EMP-001"
+  string full_name       = 4;
+  string email           = 5;
+  string phone           = 6;
+  Gender gender          = 7;
+  string birth_date      = 8;  // ISO 8601 date string YYYY-MM-DD
+  string national_id     = 9;  // NIK (Nomor Induk Kependudukan)
+  string tax_id          = 10; // NPWP
+
+  // Employment
+  string            department_id   = 11;
+  string            position_id     = 12;
+  string            manager_id      = 13;  // references another employee.id
+  EmploymentStatus  status          = 14;
+  ContractType      contract_type   = 15;
+  string            join_date       = 16;  // ISO 8601
+  string            termination_date = 17; // ISO 8601, nullable
+
+  // Denormalized for convenience (read model)
+  string department_name = 18;
+  string position_name   = 19;
+  string manager_name    = 20;
+
+  google.protobuf.Timestamp created_at = 21;
+  google.protobuf.Timestamp updated_at = 22;
+}
+
+message Department {
+  string id          = 1;
+  string tenant_id   = 2;
+  string name        = 3;
+  string description = 4;
+  string head_id     = 5;  // employee_id of department head
+  string parent_id   = 6;  // for nested departments
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message Position {
+  string id          = 1;
+  string tenant_id   = 2;
+  string title       = 3;
+  string department_id = 4;
+  string level       = 5;  // e.g. "junior", "senior", "lead", "manager"
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message OrgNode {
+  Employee employee = 1;
+  repeated OrgNode direct_reports = 2;
+}
+
+// ─── Request / Response ──────────────────────────────────────────────────────
+
+message CreateEmployeeRequest {
+  // tenant_id is injected by the gateway from the authenticated JWT.
+  // Do not pass from the frontend.
+  string tenant_id = 1;
+
+  string full_name      = 2;
+  string email          = 3;
+  string phone          = 4;
+  Gender gender         = 5;
+  string birth_date     = 6;
+  string national_id    = 7;
+  string department_id  = 8;
+  string position_id    = 9;
+  string manager_id     = 10;
+  ContractType contract_type = 11;
+  string join_date      = 12;
+}
+
+message CreateEmployeeResponse {
+  Employee employee = 1;
+}
+
+message GetEmployeeRequest {
+  string id        = 1;
+  string tenant_id = 2;
+}
+
+message GetEmployeeResponse {
+  Employee employee = 1;
+}
+
+message UpdateEmployeeRequest {
+  string id        = 1;
+  string tenant_id = 2;
+  // Only fields present in update_mask are modified.
+  google.protobuf.FieldMask update_mask = 3;
+
+  string full_name     = 4;
+  string phone         = 5;
+  string department_id = 6;
+  string position_id   = 7;
+  string manager_id    = 8;
+  EmploymentStatus status = 9;
+}
+
+message UpdateEmployeeResponse {
+  Employee employee = 1;
+}
+
+message TerminateEmployeeRequest {
+  string id               = 1;
+  string tenant_id        = 2;
+  string termination_date = 3;  // ISO 8601
+  string reason           = 4;
+}
+
+message TerminateEmployeeResponse {
+  Employee employee = 1;
+}
+
+message ListEmployeesRequest {
+  string tenant_id = 1;
+  // Pagination
+  int32 page_size  = 2;  // default 20, max 100
+  string page_token = 3;
+  // Filters
+  string department_id     = 4;
+  EmploymentStatus status  = 5;
+  string search            = 6;  // full-text search on name/email/employee_number
+}
+
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
+  string next_page_token      = 2;
+  int32 total_count           = 3;
+}
+
+message GetOrgChartRequest {
+  string tenant_id  = 1;
+  string root_id    = 2;  // start from this employee; empty = company root
+  int32 max_depth   = 3;  // default 3
+}
+
+message GetOrgChartResponse {
+  OrgNode root = 1;
+}
+
+// Department requests
+message CreateDepartmentRequest {
+  string tenant_id   = 1;
+  string name        = 2;
+  string description = 3;
+  string head_id     = 4;
+  string parent_id   = 5;
+}
+
+message CreateDepartmentResponse {
+  Department department = 1;
+}
+
+message ListDepartmentsRequest {
+  string tenant_id = 1;
+}
+
+message ListDepartmentsResponse {
+  repeated Department departments = 1;
+}
+
+// Position requests
+message CreatePositionRequest {
+  string tenant_id    = 1;
+  string title        = 2;
+  string department_id = 3;
+  string level        = 4;
+}
+
+message CreatePositionResponse {
+  Position position = 1;
+}
+
+message ListPositionsRequest {
+  string tenant_id    = 1;
+  string department_id = 2;
+}
+
+message ListPositionsResponse {
+  repeated Position positions = 1;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service EmployeeService {
+  rpc CreateEmployee(CreateEmployeeRequest) returns (CreateEmployeeResponse) {
+    option (google.api.http) = {
+      post: "/v1/employees"
+      body: "*"
+    };
+  }
+
+  rpc GetEmployee(GetEmployeeRequest) returns (GetEmployeeResponse) {
+    option (google.api.http) = {
+      get: "/v1/employees/{id}"
+    };
+  }
+
+  rpc UpdateEmployee(UpdateEmployeeRequest) returns (UpdateEmployeeResponse) {
+    option (google.api.http) = {
+      patch: "/v1/employees/{id}"
+      body: "*"
+    };
+  }
+
+  rpc TerminateEmployee(TerminateEmployeeRequest) returns (TerminateEmployeeResponse) {
+    option (google.api.http) = {
+      post: "/v1/employees/{id}/terminate"
+      body: "*"
+    };
+  }
+
+  rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse) {
+    option (google.api.http) = {
+      get: "/v1/employees"
+    };
+  }
+
+  rpc GetOrgChart(GetOrgChartRequest) returns (GetOrgChartResponse) {
+    option (google.api.http) = {
+      get: "/v1/employees/org-chart"
+    };
+  }
+
+  rpc CreateDepartment(CreateDepartmentRequest) returns (CreateDepartmentResponse) {
+    option (google.api.http) = {
+      post: "/v1/departments"
+      body: "*"
+    };
+  }
+
+  rpc ListDepartments(ListDepartmentsRequest) returns (ListDepartmentsResponse) {
+    option (google.api.http) = {
+      get: "/v1/departments"
+    };
+  }
+
+  rpc CreatePosition(CreatePositionRequest) returns (CreatePositionResponse) {
+    option (google.api.http) = {
+      post: "/v1/positions"
+      body: "*"
+    };
+  }
+
+  rpc ListPositions(ListPositionsRequest) returns (ListPositionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/positions"
+    };
+  }
+}

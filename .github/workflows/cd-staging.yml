@@ -1,0 +1,125 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false  # never cancel a deploy mid-flight
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ORG: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    name: Build & Push — ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - component: api-gateway
+            context: apps/api-gateway
+          - component: web
+            context: apps/web
+          - component: auth-service
+            context: services/auth-service
+          - component: employee-service
+            context: services/employee-service
+          - component: attendance-service
+            context: services/attendance-service
+          - component: leave-service
+            context: services/leave-service
+          - component: notification-service
+            context: services/notification-service
+          - component: audit-service
+            context: services/audit-service
+          - component: ai-service
+            context: services/ai-service
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-${{ matrix.component }}:staging-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: staging
+      url: https://staging.hris-stery.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > kubeconfig
+          echo "KUBECONFIG=kubeconfig" >> $GITHUB_ENV
+
+      - name: Run database migrations
+        run: |
+          kubectl run migrate-${{ github.sha }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-auth-service:${{ github.sha }} \
+            --restart=Never \
+            --namespace=hris-staging \
+            --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
+            --command -- /migrate up
+          kubectl wait --for=condition=complete job/migrate-${{ github.sha }} --timeout=120s -n hris-staging
+
+      - name: Update image tags in staging overlay
+        run: |
+          cd deploy/k8s/overlays/staging
+          kustomize edit set image \
+            hris-api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-api-gateway:${{ github.sha }} \
+            hris-web=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-web:${{ github.sha }} \
+            hris-auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-auth-service:${{ github.sha }} \
+            hris-employee-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-employee-service:${{ github.sha }} \
+            hris-leave-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-leave-service:${{ github.sha }} \
+            hris-attendance-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-attendance-service:${{ github.sha }} \
+            hris-notification-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-notification-service:${{ github.sha }} \
+            hris-audit-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-audit-service:${{ github.sha }} \
+            hris-ai-service=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-ai-service:${{ github.sha }}
+
+      - name: Apply to staging
+        run: kubectl apply -k deploy/k8s/overlays/staging --namespace hris-staging
+
+      - name: Wait for rollout
+        run: |
+          for svc in auth-service employee-service leave-service attendance-service api-gateway web; do
+            kubectl rollout status deployment/hris-${svc} -n hris-staging --timeout=180s
+          done
+
+      - name: Smoke test
+        run: |
+          sleep 10
+          curl -sf https://staging.hris-stery.com/health || exit 1
+          echo "Staging deployment healthy."

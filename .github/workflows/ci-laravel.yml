@@ -1,0 +1,115 @@
+name: Laravel Gateway CI
+
+on:
+  push:
+    paths:
+      - 'apps/api-gateway/**'
+  pull_request:
+    paths:
+      - 'apps/api-gateway/**'
+
+jobs:
+  lint:
+    name: PHP Lint (Pint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, json, bcmath, redis
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: apps/api-gateway/vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('apps/api-gateway/composer.lock') }}
+
+      - name: Install dependencies
+        working-directory: apps/api-gateway
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Run Laravel Pint
+        working-directory: apps/api-gateway
+        run: ./vendor/bin/pint --test
+
+  test:
+    name: PHP Tests (Pest)
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hris_admin
+          POSTGRES_PASSWORD: hris_admin_secret
+          POSTGRES_DB: hris_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, json, bcmath, redis, pdo_pgsql
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: apps/api-gateway/vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('apps/api-gateway/composer.lock') }}
+
+      - name: Install dependencies
+        working-directory: apps/api-gateway
+        run: composer install --no-progress --prefer-dist
+
+      - name: Configure environment
+        working-directory: apps/api-gateway
+        run: |
+          cp .env.ci .env
+          php artisan key:generate
+
+      - name: Run Pest tests
+        working-directory: apps/api-gateway
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: hris_test_db
+          DB_USERNAME: hris_admin
+          DB_PASSWORD: hris_admin_secret
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+        run: ./vendor/bin/pest --parallel
+
+  build:
+    name: Build Docker
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api-gateway
+          push: false
+          tags: ghcr.io/${{ github.repository_owner }}/hris-api-gateway:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package hris.ai.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/ai/v1;aiv1";
+
+// ─── Resume Analysis ─────────────────────────────────────────────────────────
+
+message AnalyzeResumeRequest {
+  string tenant_id = 1;
+  string actor_id  = 2;
+  // Either provide raw text or a MinIO object key pointing to the uploaded file.
+  oneof source {
+    string text       = 3;
+    string object_key = 4;
+  }
+}
+
+message ExtractedSkill {
+  string name       = 1;
+  string category   = 2;  // e.g. "programming", "soft skill", "tool"
+  int32  confidence = 3;  // 0-100
+}
+
+message AnalyzeResumeResponse {
+  repeated ExtractedSkill skills      = 1;
+  string                  summary     = 2;  // LLM-generated candidate summary
+  repeated string         suggested_positions = 3;
+  int32                   experience_years    = 4;
+  // Token usage for cost tracking per tenant
+  int32 input_tokens  = 5;
+  int32 output_tokens = 6;
+  string model_used   = 7;
+}
+
+// ─── Attrition Forecasting ───────────────────────────────────────────────────
+
+message ForecastAttritionRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+}
+
+message ForecastAttritionResponse {
+  // risk_score: 0.0 (low) to 1.0 (high)
+  double risk_score   = 1;
+  string risk_label   = 2;  // "low" | "medium" | "high"
+  repeated string contributing_factors = 3;
+  string recommendation = 4;
+}
+
+// ─── HR Chatbot ──────────────────────────────────────────────────────────────
+
+message ChatMessage {
+  string role    = 1;  // "user" | "assistant" | "system"
+  string content = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message ChatRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  string session_id  = 3;  // maintains conversation context
+  string message     = 4;
+  // Previous messages for context (last N turns)
+  repeated ChatMessage history = 5;
+}
+
+// ChatResponse is streamed back for real-time display.
+message ChatResponse {
+  string session_id = 1;
+  string delta      = 2;  // incremental token
+  bool   done       = 3;  // true on final chunk
+  int32  input_tokens  = 4;  // only set on final chunk
+  int32  output_tokens = 5;  // only set on final chunk
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service AIService {
+  rpc AnalyzeResume(AnalyzeResumeRequest) returns (AnalyzeResumeResponse) {
+    option (google.api.http) = {
+      post: "/v1/ai/analyze-resume"
+      body: "*"
+    };
+  }
+
+  rpc ForecastAttrition(ForecastAttritionRequest) returns (ForecastAttritionResponse) {
+    option (google.api.http) = {
+      post: "/v1/ai/forecast-attrition"
+      body: "*"
+    };
+  }
+
+  // Chat uses server-side streaming for real-time token delivery.
+  // grpc-gateway exposes this as a chunked HTTP response (SSE-compatible).
+  rpc Chat(ChatRequest) returns (stream ChatResponse) {
+    option (google.api.http) = {
+      post: "/v1/ai/chat"
+      body: "*"
+    };
+  }
+}

@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package hris.audit.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/audit/v1;auditv1";
+
+// AuditEvent is the canonical record of every significant action in the system.
+// The audit.audit_events table is INSERT-ONLY (enforced by PostgreSQL RLS).
+message AuditEvent {
+  string id          = 1;  // UUID v7
+  string tenant_id   = 2;
+  string actor_id    = 3;  // user who performed the action; "system" for automated actions
+  string actor_email = 4;  // denormalized for readability
+
+  string event_type  = 5;  // matches NATS subject, e.g. "hris.workforce.employee.created"
+  string entity_type = 6;  // e.g. "employee", "leave_request"
+  string entity_id   = 7;  // the ID of the affected entity
+
+  // before/after captures the diff for update operations.
+  // Sensitive fields (passwords, tax IDs) must be redacted before recording.
+  google.protobuf.Struct before = 8;
+  google.protobuf.Struct after  = 9;
+
+  string ip_address  = 10;
+  string user_agent  = 11;
+  string request_id  = 12;  // correlates with OpenTelemetry trace ID
+
+  google.protobuf.Timestamp occurred_at = 13;
+}
+
+message RecordAuditEventRequest {
+  string tenant_id   = 1;
+  string actor_id    = 2;
+  string actor_email = 3;
+  string event_type  = 4;
+  string entity_type = 5;
+  string entity_id   = 6;
+  google.protobuf.Struct before = 7;
+  google.protobuf.Struct after  = 8;
+  string ip_address  = 9;
+  string user_agent  = 10;
+  string request_id  = 11;
+  google.protobuf.Timestamp occurred_at = 12;
+}
+
+message RecordAuditEventResponse {}
+
+message QueryAuditLogRequest {
+  string tenant_id   = 1;
+  string entity_type = 2;
+  string entity_id   = 3;
+  string actor_id    = 4;
+  string event_type  = 5;
+  google.protobuf.Timestamp from = 6;
+  google.protobuf.Timestamp to   = 7;
+  int32  page_size   = 8;
+  string page_token  = 9;
+}
+
+message QueryAuditLogResponse {
+  repeated AuditEvent events = 1;
+  string next_page_token     = 2;
+  int32  total_count         = 3;
+}
+
+service AuditService {
+  // RecordAuditEvent is called by the audit-service NATS consumer internally.
+  // External callers should publish to NATS; audit-service consumes and records.
+  // This RPC is for internal use only.
+  rpc RecordAuditEvent(RecordAuditEventRequest) returns (RecordAuditEventResponse) {
+    option (google.api.http) = {
+      post: "/v1/audit/events"
+      body: "*"
+    };
+  }
+
+  // QueryAuditLog is called by authorized HR Admins through the gateway.
+  rpc QueryAuditLog(QueryAuditLogRequest) returns (QueryAuditLogResponse) {
+    option (google.api.http) = {
+      get: "/v1/audit/events"
+    };
+  }
+}

@@ -1,0 +1,52 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+services/*/tmp/
+services/*/bin/
+go.work.sum
+
+# Generated proto stubs (regenerate with make proto-gen)
+gen/
+
+# Node
+node_modules/
+apps/web/.svelte-kit/
+apps/web/build/
+apps/web/.output/
+
+# Laravel
+apps/api-gateway/vendor/
+apps/api-gateway/storage/logs/
+apps/api-gateway/storage/framework/cache/
+apps/api-gateway/storage/framework/sessions/
+apps/api-gateway/storage/framework/views/
+apps/api-gateway/bootstrap/cache/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test output
+coverage.out
+playwright-report/
+test-results/
+
+# Secrets — never commit
+*.pem
+*.key
+*.p12
+kubeconfig

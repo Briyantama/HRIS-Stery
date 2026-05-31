@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+package hris.leave.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/leave/v1;leavev1";
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum LeaveStatus {
+  LEAVE_STATUS_UNSPECIFIED = 0;
+  LEAVE_STATUS_PENDING     = 1;
+  LEAVE_STATUS_APPROVED    = 2;
+  LEAVE_STATUS_REJECTED    = 3;
+  LEAVE_STATUS_CANCELLED   = 4;
+}
+
+enum LeaveTypeCode {
+  LEAVE_TYPE_CODE_UNSPECIFIED = 0;
+  LEAVE_TYPE_CODE_ANNUAL      = 1;  // Cuti Tahunan
+  LEAVE_TYPE_CODE_SICK        = 2;  // Cuti Sakit
+  LEAVE_TYPE_CODE_MATERNITY   = 3;  // Cuti Melahirkan
+  LEAVE_TYPE_CODE_PATERNITY   = 4;  // Cuti Ayah
+  LEAVE_TYPE_CODE_BEREAVEMENT = 5;  // Cuti Duka
+  LEAVE_TYPE_CODE_UNPAID      = 6;  // Cuti Tanpa Bayar
+  LEAVE_TYPE_CODE_OTHER       = 7;
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+message LeaveType {
+  string        id          = 1;
+  string        tenant_id   = 2;
+  LeaveTypeCode code        = 3;
+  string        name        = 4;  // localized name
+  int32         max_days_per_year = 5;
+  bool          requires_document = 6;
+  bool          is_paid     = 7;
+}
+
+message LeaveRequest {
+  string      id          = 1;
+  string      tenant_id   = 2;
+  string      employee_id = 3;
+  string      leave_type_id = 4;
+  LeaveStatus status      = 5;
+
+  string start_date = 6;  // ISO 8601 YYYY-MM-DD
+  string end_date   = 7;  // ISO 8601 YYYY-MM-DD
+  int32  days_count = 8;  // computed by service, not client
+
+  string reason          = 9;
+  string rejection_reason = 10;  // populated on REJECTED
+  string approved_by_id  = 11;   // employee_id of approver
+
+  // Denormalized for read convenience
+  string employee_name    = 12;
+  string leave_type_name  = 13;
+  string approver_name    = 14;
+
+  // Optional supporting document reference (MinIO object key)
+  string document_key = 15;
+
+  google.protobuf.Timestamp created_at   = 16;
+  google.protobuf.Timestamp updated_at   = 17;
+  google.protobuf.Timestamp approved_at  = 18;
+}
+
+message LeaveBalance {
+  string tenant_id    = 1;
+  string employee_id  = 2;
+  int32  year         = 3;
+
+  // Per leave type balance
+  repeated LeaveTypeBalance balances = 4;
+}
+
+message LeaveTypeBalance {
+  string        leave_type_id   = 1;
+  LeaveTypeCode leave_type_code = 2;
+  string        leave_type_name = 3;
+  int32         entitled_days   = 4;
+  int32         used_days       = 5;
+  int32         pending_days    = 6;
+  int32         remaining_days  = 7;
+}
+
+// ─── Requests / Responses ────────────────────────────────────────────────────
+
+message ApplyLeaveRequest {
+  string tenant_id      = 1;
+  string employee_id    = 2;
+  string leave_type_id  = 3;
+  string start_date     = 4;
+  string end_date       = 5;
+  string reason         = 6;
+  string document_key   = 7;  // optional
+}
+
+message ApplyLeaveResponse {
+  LeaveRequest leave_request = 1;
+}
+
+message ApproveLeaveRequest {
+  string id          = 1;
+  string tenant_id   = 2;
+  string approver_id = 3;
+}
+
+message ApproveLeaveResponse {
+  LeaveRequest leave_request = 1;
+}
+
+message RejectLeaveRequest {
+  string id               = 1;
+  string tenant_id        = 2;
+  string approver_id      = 3;
+  string rejection_reason = 4;
+}
+
+message RejectLeaveResponse {
+  LeaveRequest leave_request = 1;
+}
+
+message CancelLeaveRequest {
+  string id          = 1;
+  string tenant_id   = 2;
+  string employee_id = 3;  // only the requester can cancel
+}
+
+message CancelLeaveResponse {
+  LeaveRequest leave_request = 1;
+}
+
+message GetLeaveBalanceRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  int32  year        = 3;  // defaults to current year if 0
+}
+
+message GetLeaveBalanceResponse {
+  LeaveBalance balance = 1;
+}
+
+message ListLeaveRequestsRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;   // optional: filter by employee
+  string approver_id = 3;   // optional: filter by approver (for manager view)
+  LeaveStatus status = 4;   // optional: filter by status
+  int32  year        = 5;   // optional: filter by year
+  int32  page_size   = 6;
+  string page_token  = 7;
+}
+
+message ListLeaveRequestsResponse {
+  repeated LeaveRequest leave_requests = 1;
+  string next_page_token               = 2;
+  int32  total_count                   = 3;
+}
+
+message GetLeaveRequestRequest {
+  string id        = 1;
+  string tenant_id = 2;
+}
+
+message GetLeaveRequestResponse {
+  LeaveRequest leave_request = 1;
+}
+
+// Leave type configuration
+message ListLeaveTypesRequest {
+  string tenant_id = 1;
+}
+
+message ListLeaveTypesResponse {
+  repeated LeaveType leave_types = 1;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+service LeaveService {
+  rpc ApplyLeave(ApplyLeaveRequest) returns (ApplyLeaveResponse) {
+    option (google.api.http) = {
+      post: "/v1/leave-requests"
+      body: "*"
+    };
+  }
+
+  rpc GetLeaveRequest(GetLeaveRequestRequest) returns (GetLeaveRequestResponse) {
+    option (google.api.http) = {
+      get: "/v1/leave-requests/{id}"
+    };
+  }
+
+  rpc ListLeaveRequests(ListLeaveRequestsRequest) returns (ListLeaveRequestsResponse) {
+    option (google.api.http) = {
+      get: "/v1/leave-requests"
+    };
+  }
+
+  rpc ApproveLeave(ApproveLeaveRequest) returns (ApproveLeaveResponse) {
+    option (google.api.http) = {
+      post: "/v1/leave-requests/{id}/approve"
+      body: "*"
+    };
+  }
+
+  rpc RejectLeave(RejectLeaveRequest) returns (RejectLeaveResponse) {
+    option (google.api.http) = {
+      post: "/v1/leave-requests/{id}/reject"
+      body: "*"
+    };
+  }
+
+  rpc CancelLeave(CancelLeaveRequest) returns (CancelLeaveResponse) {
+    option (google.api.http) = {
+      post: "/v1/leave-requests/{id}/cancel"
+      body: "*"
+    };
+  }
+
+  rpc GetLeaveBalance(GetLeaveBalanceRequest) returns (GetLeaveBalanceResponse) {
+    option (google.api.http) = {
+      get: "/v1/leave-balance/{employee_id}"
+    };
+  }
+
+  rpc ListLeaveTypes(ListLeaveTypesRequest) returns (ListLeaveTypesResponse) {
+    option (google.api.http) = {
+      get: "/v1/leave-types"
+    };
+  }
+}

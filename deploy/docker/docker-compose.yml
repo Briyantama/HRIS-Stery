@@ -1,0 +1,193 @@
+version: "3.9"
+
+# ============================================================
+# HRIS-Stery — Local Development Environment
+# ============================================================
+# Start:  make dev
+# Stop:   make dev-down
+# Reset:  make dev-reset  (destroys volumes)
+#
+# Services exposed on localhost:
+#   PostgreSQL   → 5432
+#   Redis        → 6379
+#   NATS         → 4222 (client), 8222 (monitor)
+#   MinIO        → 9000 (API), 9001 (console)
+#   Jaeger       → 16686 (UI), 4317 (OTLP gRPC), 4318 (OTLP HTTP)
+#   Prometheus   → 9090
+# ============================================================
+
+networks:
+  hris-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  nats-data:
+  minio-data:
+  jaeger-data:
+  prometheus-data:
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL 16
+  # ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: hris-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hris_admin
+      POSTGRES_PASSWORD: hris_admin_secret
+      POSTGRES_DB: hris_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hris_admin -d hris_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # Redis 7
+  # ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: hris-redis
+    restart: unless-stopped
+    command: redis-server --requirepass hris_redis_secret --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "hris_redis_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # NATS with JetStream enabled
+  # ──────────────────────────────────────────────────────────
+  nats:
+    image: nats:2.10-alpine
+    container_name: hris-nats
+    restart: unless-stopped
+    command:
+      - "--jetstream"
+      - "--store_dir=/data"
+      - "--http_port=8222"
+      - "--config=/etc/nats/nats.conf"
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring HTTP
+    volumes:
+      - nats-data:/data
+      - ./nats.conf:/etc/nats/nats.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # MinIO (S3-compatible object storage)
+  # Used for: resume files, payslip PDFs, profile photos
+  # Console: http://localhost:9001 (minioadmin / minioadmin123)
+  # ──────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: hris-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # Jaeger (all-in-one — traces only in dev)
+  # UI: http://localhost:16686
+  # ──────────────────────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: hris-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    volumes:
+      - jaeger-data:/badger
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # Prometheus
+  # UI: http://localhost:9090
+  # ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: hris-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - hris-net
+
+  # ──────────────────────────────────────────────────────────
+  # PgBouncer — connection pooling (transaction mode, required for RLS)
+  # Applications connect to PgBouncer on 6432, not Postgres directly.
+  # ──────────────────────────────────────────────────────────
+  pgbouncer:
+    image: pgbouncer/pgbouncer:1.23.1
+    container_name: hris-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASES_HOST: postgres
+      DATABASES_PORT: "5432"
+      DATABASES_USER: hris_app
+      DATABASES_PASSWORD: hris_app_secret
+      DATABASES_DBNAME: hris_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "200"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
+      PGBOUNCER_AUTH_TYPE: md5
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hris-net

@@ -1,0 +1,156 @@
+syntax = "proto3";
+
+package hris.attendance.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/attendance/v1;attendancev1";
+
+enum AttendanceStatus {
+  ATTENDANCE_STATUS_UNSPECIFIED = 0;
+  ATTENDANCE_STATUS_PRESENT     = 1;
+  ATTENDANCE_STATUS_LATE        = 2;
+  ATTENDANCE_STATUS_ABSENT      = 3;
+  ATTENDANCE_STATUS_HALF_DAY    = 4;
+  ATTENDANCE_STATUS_ON_LEAVE    = 5;
+}
+
+message AttendanceRecord {
+  string id          = 1;
+  string tenant_id   = 2;
+  string employee_id = 3;
+  string date        = 4;  // ISO 8601 YYYY-MM-DD
+
+  google.protobuf.Timestamp check_in_at  = 5;
+  google.protobuf.Timestamp check_out_at = 6;
+
+  // Location data (optional — configurable per tenant)
+  double check_in_latitude   = 7;
+  double check_in_longitude  = 8;
+  double check_out_latitude  = 9;
+  double check_out_longitude = 10;
+
+  AttendanceStatus status    = 11;
+  string work_duration_mins  = 12;  // computed after check-out
+  string notes               = 13;
+
+  // Who made this record — system (check-in/out) or admin (override)
+  string created_by          = 14;
+  bool   is_override         = 15;
+
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+message AttendanceSummary {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  string period      = 3;  // e.g. "2026-05"
+
+  int32 total_working_days  = 4;
+  int32 present_days        = 5;
+  int32 absent_days         = 6;
+  int32 late_days           = 7;
+  int32 on_leave_days       = 8;
+  int32 total_work_minutes  = 9;
+}
+
+message CheckInRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  double latitude    = 3;
+  double longitude   = 4;
+  string notes       = 5;
+}
+
+message CheckInResponse {
+  AttendanceRecord record = 1;
+}
+
+message CheckOutRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  double latitude    = 3;
+  double longitude   = 4;
+  string notes       = 5;
+}
+
+message CheckOutResponse {
+  AttendanceRecord record = 1;
+}
+
+message GetAttendanceSummaryRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;
+  string period      = 3;  // "YYYY-MM"
+}
+
+message GetAttendanceSummaryResponse {
+  AttendanceSummary summary = 1;
+}
+
+message ListAttendanceRequest {
+  string tenant_id   = 1;
+  string employee_id = 2;  // optional
+  string date_from   = 3;  // ISO 8601 YYYY-MM-DD
+  string date_to     = 4;
+  int32  page_size   = 5;
+  string page_token  = 6;
+}
+
+message ListAttendanceResponse {
+  repeated AttendanceRecord records = 1;
+  string next_page_token            = 2;
+  int32  total_count                = 3;
+}
+
+message OverrideAttendanceRequest {
+  string tenant_id             = 1;
+  string employee_id           = 2;
+  string date                  = 3;
+  google.protobuf.Timestamp check_in_at  = 4;
+  google.protobuf.Timestamp check_out_at = 5;
+  AttendanceStatus status      = 6;
+  string reason                = 7;
+  string admin_id              = 8;
+}
+
+message OverrideAttendanceResponse {
+  AttendanceRecord record = 1;
+}
+
+service AttendanceService {
+  rpc CheckIn(CheckInRequest) returns (CheckInResponse) {
+    option (google.api.http) = {
+      post: "/v1/attendance/check-in"
+      body: "*"
+    };
+  }
+
+  rpc CheckOut(CheckOutRequest) returns (CheckOutResponse) {
+    option (google.api.http) = {
+      post: "/v1/attendance/check-out"
+      body: "*"
+    };
+  }
+
+  rpc GetAttendanceSummary(GetAttendanceSummaryRequest) returns (GetAttendanceSummaryResponse) {
+    option (google.api.http) = {
+      get: "/v1/attendance/summary/{employee_id}"
+    };
+  }
+
+  rpc ListAttendance(ListAttendanceRequest) returns (ListAttendanceResponse) {
+    option (google.api.http) = {
+      get: "/v1/attendance"
+    };
+  }
+
+  rpc OverrideAttendance(OverrideAttendanceRequest) returns (OverrideAttendanceResponse) {
+    option (google.api.http) = {
+      post: "/v1/attendance/override"
+      body: "*"
+    };
+  }
+}
