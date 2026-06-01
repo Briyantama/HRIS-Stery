@@ -92,7 +92,7 @@ Deterministic rules that trigger automatically:
 
 In your request, mention the skill:
 
-```
+```bash
 Use the proto-review skill to verify the CreateEmployee proto exists.
 ```
 
@@ -102,7 +102,7 @@ Claude will read the skill and guide you through it.
 
 Mention the subagent in your request:
 
-```
+```bash
 Review this CreateEmployeeHandler code with go-backend-reviewer.
 ```
 
@@ -111,6 +111,7 @@ The subagent will review according to its guidelines.
 ### **Using Hooks**
 
 Hooks activate automatically. No action needed. They will:
+
 - **Block:** Prevent edits to Phase 2 files
 - **Warn:** Remind you of requirements before committing
 

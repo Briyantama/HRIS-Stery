@@ -38,7 +38,8 @@ Located in `.claude/agents/`, these are AI agents with specific expertise:
 **How to Use:** Mention the subagent name in your request, e.g., "Review this Go code with go-backend-reviewer"
 
 Example:
-```
+
+```bash
 Use go-backend-reviewer to review this CreateEmployeeHandler implementation
 ```
 
@@ -94,7 +95,8 @@ Configured in `.claude/settings.json`, hooks are automated checks:
 ### Manually Triggering a Skill
 
 **In your request:**
-```
+
+```bash
 Use the adr-review skill before implementing this.
 
 Here's my situation: I'm adding a new endpoint to employee-service.
@@ -106,7 +108,8 @@ Claude will read the skill file and guide you through it.
 ### Invoking a Subagent
 
 **In your request:**
-```
+
+```bash
 Review this CreateEmployeeHandler code with go-backend-reviewer.
 
 Here's the code: [paste code]
@@ -117,7 +120,8 @@ Claude will invoke the subagent, which will review the code according to its gui
 ### Chaining Workflows
 
 **Example for a new RPC endpoint:**
-```
+
+```bash
 I'm implementing a new RPC endpoint. Help me:
 
 1. Use adr-review to check the ADR
@@ -132,7 +136,7 @@ Here's my task: [describe what you're building]
 
 ## File Structure
 
-```
+```bash
 .claude/
 ├── settings.json                  # Hook and configuration definitions
 ├── SETUP_GUIDE.md                # This file
@@ -160,7 +164,7 @@ Here's my task: [describe what you're building]
 
 ### Scenario 1: Adding a New Employee Endpoint
 
-```
+```bash
 1. Skill: adr-review
    → Check docs/adr/ for employee-service architecture
 
@@ -179,7 +183,7 @@ Here's my task: [describe what you're building]
 
 ### Scenario 2: Creating a Database Migration
 
-```
+```bash
 1. Skill: migration-review
    → Check migration requirements and RLS patterns
 
