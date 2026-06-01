@@ -1,0 +1,221 @@
+{
+  "version": "1.0",
+  "description": "Claude Code configuration for HRIS-Stery project",
+
+  "permissions": {
+    "priority": "user",
+    "allowedTools": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Agent",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "AskUserQuestion"
+    ]
+  },
+
+  "hooks": {
+    "preEdit": [
+      {
+        "name": "phase-2-block",
+        "description": "Block edits to Phase 2 services (payroll, recruitment, performance)",
+        "pathPatterns": [
+          "services/payroll-service/**",
+          "services/recruitment-service/**",
+          "services/performance-service/**"
+        ],
+        "action": "block",
+        "message": "❌ Phase 2 features are blocked. ADR-0004: Payroll, recruitment, and performance are deferred to Phase 2. Return 501 Not Implemented."
+      },
+      {
+        "name": "adr-reminder",
+        "description": "Remind to check ADR before modifying a service",
+        "pathPatterns": [
+          "services/*/internal/**",
+          "services/*/cmd/**"
+        ],
+        "action": "warn",
+        "message": "📋 Remember: Check relevant ADR in docs/adr/ before implementing. Use adr-review skill."
+      },
+      {
+        "name": "rls-reminder",
+        "description": "Remind about RLS when touching tables with tenant_id",
+        "pathPatterns": [
+          "services/*/migrations/*.sql"
+        ],
+        "action": "warn",
+        "message": "🔒 Reminder: All tenant-scoped tables need FORCE ROW LEVEL SECURITY and tenant_isolation policy. Run migration-review skill."
+      },
+      {
+        "name": "migration-down-check",
+        "description": "Require both up and down migration files",
+        "pathPatterns": [
+          "services/*/migrations/*.up.sql"
+        ],
+        "action": "warn",
+        "message": "⬇️ Reminder: Every .up.sql migration needs a corresponding .down.sql file that fully reverses it. Run migration-review skill."
+      },
+      {
+        "name": "proto-before-handler",
+        "description": "Remind to check proto contract before implementing handler",
+        "pathPatterns": [
+          "services/*/internal/interfaces/grpc/*.go"
+        ],
+        "action": "warn",
+        "message": "📝 Reminder: Proto contract must exist in proto/hris/{domain}/v1/ before implementing handler. Run proto-review skill."
+      },
+      {
+        "name": "controller-logic-limit",
+        "description": "Warn if Laravel controller might be too large",
+        "pathPatterns": [
+          "gateway/app/Http/Controllers/**"
+        ],
+        "action": "warn",
+        "message": "🎯 Reminder: Laravel controllers must be ≤20 lines of logic. Delegate to Service classes. Run laravel-gateway-reviewer."
+      },
+      {
+        "name": "no-global-state",
+        "description": "Block package-level database/service variables in Go",
+        "pathPatterns": [
+          "services/*/internal/**/*.go"
+        ],
+        "action": "warn",
+        "message": "⚠️ Check: No package-level globals (var db, logger, etc). Use constructor injection. Run go-backend-reviewer."
+      }
+    ],
+
+    "postCommit": [
+      {
+        "name": "go-lint-check",
+        "description": "Run go vet on Go changes",
+        "command": "cd services && for svc in auth-service employee-service; do cd $svc && go vet ./... || exit 1; cd ..; done",
+        "onFailure": "warn",
+        "message": "⚠️ go vet found issues. Fix before pushing."
+      },
+      {
+        "name": "migration-reversibility",
+        "description": "Warn if migration down file might not be reversible",
+        "trigger": "pathMatches('services/*/migrations/*.sql')",
+        "action": "info",
+        "message": "ℹ️ Verify migration reversibility: Check that .down.sql fully reverses .up.sql and drops in correct order."
+      }
+    ]
+  },
+
+  "skills": {
+    "adr-review": {
+      "path": ".claude/skills/adr-review/SKILL.md",
+      "description": "Check if ADR exists and is relevant before writing code"
+    },
+    "proto-review": {
+      "path": ".claude/skills/proto-review/SKILL.md",
+      "description": "Verify proto contracts exist before implementing gRPC handlers"
+    },
+    "migration-review": {
+      "path": ".claude/skills/migration-review/SKILL.md",
+      "description": "Ensure migrations are reversible and have RLS on tenant-scoped tables"
+    },
+    "event-review": {
+      "path": ".claude/skills/event-review/SKILL.md",
+      "description": "Check event envelope structure and idempotency patterns"
+    },
+    "architecture-review": {
+      "path": ".claude/skills/architecture-review/SKILL.md",
+      "description": "Verify clean architecture boundaries and business logic placement"
+    },
+    "go-style-review": {
+      "path": ".claude/skills/go-style-review/SKILL.md",
+      "description": "Check Go type safety, RLS context injection, and error handling"
+    }
+  },
+
+  "subagents": {
+    "go-backend-reviewer": {
+      "path": ".claude/agents/go-backend-reviewer.md",
+      "trigger": "code review for Go services"
+    },
+    "laravel-gateway-reviewer": {
+      "path": ".claude/agents/laravel-gateway-reviewer.md",
+      "trigger": "code review for Laravel gateway"
+    },
+    "migration-reviewer": {
+      "path": ".claude/agents/migration-reviewer.md",
+      "trigger": "code review for database migrations"
+    },
+    "event-nats-reviewer": {
+      "path": ".claude/agents/event-nats-reviewer.md",
+      "trigger": "code review for NATS event publishing/consumption"
+    },
+    "proto-reviewer": {
+      "path": ".claude/agents/proto-reviewer.md",
+      "trigger": "code review for proto files"
+    }
+  },
+
+  "decisionTree": {
+    "path": ".claude/REVIEW_DECISION_TREE.md",
+    "description": "Decision tree for choosing which skill/subagent to use"
+  },
+
+  "repository": {
+    "name": "HRIS-Stery",
+    "description": "Multi-tenant HRIS system with Go services, Laravel gateway, SvelteKit frontend",
+    "rulesFile": "CLAUDE.md",
+    "adrDirectory": "docs/adr/",
+    "protoDirectory": "proto/hris/",
+    "services": [
+      {
+        "name": "auth-service",
+        "status": "LOCKED (M1 complete)",
+        "schema": "auth",
+        "phase": "M1"
+      },
+      {
+        "name": "employee-service",
+        "status": "LOCKED (M1 complete)",
+        "schema": "employee",
+        "phase": "M1"
+      },
+      {
+        "name": "attendance-service",
+        "status": "Planned",
+        "schema": "attendance",
+        "phase": "M2"
+      },
+      {
+        "name": "leave-service",
+        "status": "Planned",
+        "schema": "leave",
+        "phase": "M2"
+      },
+      {
+        "name": "notification-service",
+        "status": "Planned",
+        "schema": "notification",
+        "phase": "M2"
+      },
+      {
+        "name": "audit-service",
+        "status": "Planned",
+        "schema": "audit",
+        "phase": "M2"
+      },
+      {
+        "name": "document-service",
+        "status": "Planned",
+        "schema": "document",
+        "phase": "M2"
+      }
+    ],
+    "phase2Blocked": [
+      "payroll-service",
+      "recruitment-service",
+      "performance-service",
+      "tax-rules-service"
+    ]
+  }
+}
