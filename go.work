@@ -4,7 +4,7 @@ use (
 	./services/auth-service
 	./services/employee-service
 	./services/attendance-service
-	// ./services/leave-service
+	./services/leave-service
 	// ./services/notification-service
 	// ./services/audit-service
 	// ./services/ai-service
