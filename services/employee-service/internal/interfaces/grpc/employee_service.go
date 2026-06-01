@@ -9,7 +9,6 @@ import (
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/queries"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // EmployeeServiceServer implements employeev1.EmployeeServiceServer.
@@ -49,7 +48,7 @@ func NewEmployeeServiceServer(
 }
 
 // CreateEmployee creates a new employee.
-func (s *EmployeeServiceServer) CreateEmployee(ctx context.Context, req *employeev1.CreateEmployeeRequest) (*employeev1.EmployeeResponse, error) {
+func (s *EmployeeServiceServer) CreateEmployee(ctx context.Context, req *employeev1.CreateEmployeeRequest) (*employeev1.CreateEmployeeResponse, error) {
 	if req.TenantId == "" || req.Email == "" || req.FullName == "" {
 		return nil, status.Error(codes.InvalidArgument, "tenant_id, email, and full_name are required")
 	}
@@ -72,49 +71,48 @@ func (s *EmployeeServiceServer) CreateEmployee(ctx context.Context, req *employe
 		return nil, status.Errorf(codes.Internal, "create employee failed: %v", err)
 	}
 
-	return &employeev1.EmployeeResponse{
+	emp := &employeev1.Employee{
 		Id:           result.EmployeeID,
-		Email:        result.Email,
+		TenantId:     req.TenantId,
 		FullName:     result.FullName,
+		Email:        result.Email,
+		Phone:        req.Phone,
 		DepartmentId: result.DepartmentID,
 		PositionId:   result.PositionID,
+	}
+
+	return &employeev1.CreateEmployeeResponse{
+		Employee: emp,
 	}, nil
 }
 
 // GetEmployee retrieves an employee by ID.
-func (s *EmployeeServiceServer) GetEmployee(ctx context.Context, req *employeev1.GetEmployeeRequest) (*employeev1.EmployeeDetailResponse, error) {
-	if req.TenantId == "" || req.EmployeeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "tenant_id and employee_id are required")
+func (s *EmployeeServiceServer) GetEmployee(ctx context.Context, req *employeev1.GetEmployeeRequest) (*employeev1.GetEmployeeResponse, error) {
+	if req.TenantId == "" || req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id and id are required")
 	}
 
 	result, err := s.getEmployeeHandler.Handle(ctx, queries.GetEmployeeQuery{
 		TenantID:   req.TenantId,
-		EmployeeID: req.EmployeeId,
+		EmployeeID: req.Id,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "employee not found: %v", err)
 	}
 
-	resp := &employeev1.EmployeeDetailResponse{
+	emp := &employeev1.Employee{
 		Id:           result.ID,
-		Email:        result.Email,
+		TenantId:     req.TenantId,
 		FullName:     result.FullName,
+		Email:        result.Email,
 		Phone:        result.Phone,
 		DepartmentId: result.DepartmentID,
 		PositionId:   result.PositionID,
-		Status:       result.Status,
-		ContractType: result.ContractType,
-		JoinDate:     timestamppb.Unix(result.JoinDate, 0),
-		CreatedAt:    timestamppb.Unix(result.CreatedAt, 0),
-		UpdatedAt:    timestamppb.Unix(result.UpdatedAt, 0),
 	}
-	if result.ManagerID != nil {
-		resp.ManagerId = *result.ManagerID
-	}
-	if result.TerminationDate != nil {
-		resp.TerminationDate = timestamppb.Unix(*result.TerminationDate, 0)
-	}
-	return resp, nil
+
+	return &employeev1.GetEmployeeResponse{
+		Employee: emp,
+	}, nil
 }
 
 // ListEmployees lists employees with optional filters.
@@ -123,52 +121,58 @@ func (s *EmployeeServiceServer) ListEmployees(ctx context.Context, req *employee
 		return nil, status.Error(codes.InvalidArgument, "tenant_id is required")
 	}
 
+	var deptID *string
+	if req.DepartmentId != "" {
+		deptID = &req.DepartmentId
+	}
 	result, err := s.listEmployeesHandler.Handle(ctx, queries.ListEmployeesQuery{
 		TenantID:     req.TenantId,
-		Status:       getStringPtr(req.Status),
-		DepartmentID: getStringPtr(req.DepartmentId),
-		SearchText:   req.SearchText,
+		DepartmentID: deptID,
+		SearchText:   req.Search,
 		Limit:        req.PageSize,
-		Offset:       req.PageOffset,
+		Offset:       0, // TODO: Implement pagination with page_token
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list employees failed: %v", err)
 	}
 
-	employees := make([]*employeev1.EmployeeResponse, len(result.Employees))
+	employees := make([]*employeev1.Employee, len(result.Employees))
 	for i, emp := range result.Employees {
-		employees[i] = &employeev1.EmployeeResponse{
+		employees[i] = &employeev1.Employee{
 			Id:           emp.ID,
+			TenantId:     req.TenantId,
 			Email:        emp.Email,
 			FullName:     emp.FullName,
 			DepartmentId: emp.DepartmentID,
 			PositionId:   emp.PositionID,
-			Status:       emp.Status,
 		}
 	}
 
 	return &employeev1.ListEmployeesResponse{
-		Employees:  employees,
-		Total:      result.Total,
-		PageSize:   result.Limit,
-		PageOffset: result.Offset,
+		Employees:    employees,
+		TotalCount:   int32(result.Total),
+		NextPageToken: "", // TODO: Implement pagination tokens
 	}, nil
 }
 
 // TerminateEmployee terminates an employee.
 func (s *EmployeeServiceServer) TerminateEmployee(ctx context.Context, req *employeev1.TerminateEmployeeRequest) (*employeev1.TerminateEmployeeResponse, error) {
-	if req.TenantId == "" || req.EmployeeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "tenant_id and employee_id are required")
+	if req.TenantId == "" || req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant_id and id are required")
 	}
 
 	terminationDate := time.Now().UTC()
-	if req.TerminationDate != nil {
-		terminationDate = req.TerminationDate.AsTime()
+	if req.TerminationDate != "" {
+		t, err := time.Parse(time.RFC3339, req.TerminationDate)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid termination_date format")
+		}
+		terminationDate = t
 	}
 
 	result, err := s.terminateEmployeeHandler.Handle(ctx, commands.TerminateEmployeeCommand{
 		TenantID:        req.TenantId,
-		EmployeeID:      req.EmployeeId,
+		EmployeeID:      req.Id,
 		TerminationDate: terminationDate,
 		ActorID:         "system", // TODO: Extract from context
 	})
@@ -176,15 +180,20 @@ func (s *EmployeeServiceServer) TerminateEmployee(ctx context.Context, req *empl
 		return nil, status.Errorf(codes.Internal, "terminate employee failed: %v", err)
 	}
 
+	emp := &employeev1.Employee{
+		Id:               result.EmployeeID,
+		TenantId:         req.TenantId,
+		Email:            result.Email,
+		TerminationDate:  terminationDate.Format(time.RFC3339),
+	}
+
 	return &employeev1.TerminateEmployeeResponse{
-		EmployeeId:      result.EmployeeID,
-		Email:           result.Email,
-		TerminationDate: timestamppb.Unix(result.TerminationDate.Unix(), 0),
+		Employee: emp,
 	}, nil
 }
 
 // CreateDepartment creates a new department.
-func (s *EmployeeServiceServer) CreateDepartment(ctx context.Context, req *employeev1.CreateDepartmentRequest) (*employeev1.DepartmentResponse, error) {
+func (s *EmployeeServiceServer) CreateDepartment(ctx context.Context, req *employeev1.CreateDepartmentRequest) (*employeev1.CreateDepartmentResponse, error) {
 	if req.TenantId == "" || req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "tenant_id and name are required")
 	}
@@ -199,10 +208,15 @@ func (s *EmployeeServiceServer) CreateDepartment(ctx context.Context, req *emplo
 		return nil, status.Errorf(codes.Internal, "create department failed: %v", err)
 	}
 
-	return &employeev1.DepartmentResponse{
+	dept := &employeev1.Department{
 		Id:          result.DepartmentID,
+		TenantId:    req.TenantId,
 		Name:        result.Name,
 		Description: result.Description,
+	}
+
+	return &employeev1.CreateDepartmentResponse{
+		Department: dept,
 	}, nil
 }
 
@@ -219,10 +233,11 @@ func (s *EmployeeServiceServer) ListDepartments(ctx context.Context, req *employ
 		return nil, status.Errorf(codes.Internal, "list departments failed: %v", err)
 	}
 
-	departments := make([]*employeev1.DepartmentResponse, len(result.Departments))
+	departments := make([]*employeev1.Department, len(result.Departments))
 	for i, dept := range result.Departments {
-		departments[i] = &employeev1.DepartmentResponse{
+		departments[i] = &employeev1.Department{
 			Id:          dept.ID,
+			TenantId:    req.TenantId,
 			Name:        dept.Name,
 			Description: dept.Description,
 		}
@@ -233,12 +248,11 @@ func (s *EmployeeServiceServer) ListDepartments(ctx context.Context, req *employ
 
 	return &employeev1.ListDepartmentsResponse{
 		Departments: departments,
-		Total:       result.Total,
 	}, nil
 }
 
 // CreatePosition creates a new position.
-func (s *EmployeeServiceServer) CreatePosition(ctx context.Context, req *employeev1.CreatePositionRequest) (*employeev1.PositionResponse, error) {
+func (s *EmployeeServiceServer) CreatePosition(ctx context.Context, req *employeev1.CreatePositionRequest) (*employeev1.CreatePositionResponse, error) {
 	if req.TenantId == "" || req.Title == "" {
 		return nil, status.Error(codes.InvalidArgument, "tenant_id and title are required")
 	}
@@ -247,21 +261,24 @@ func (s *EmployeeServiceServer) CreatePosition(ctx context.Context, req *employe
 	}
 
 	result, err := s.createPositionHandler.Handle(ctx, commands.CreatePositionCommand{
-		TenantID:    req.TenantId,
-		Title:       req.Title,
-		Description: req.Description,
-		Level:       req.Level,
-		ActorID:     "system", // TODO: Extract from context
+		TenantID: req.TenantId,
+		Title:    req.Title,
+		Level:    req.Level,
+		ActorID:  "system", // TODO: Extract from context
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create position failed: %v", err)
 	}
 
-	return &employeev1.PositionResponse{
-		Id:          result.PositionID,
-		Title:       result.Title,
-		Description: result.Description,
-		Level:       result.Level,
+	pos := &employeev1.Position{
+		Id:       result.PositionID,
+		TenantId: req.TenantId,
+		Title:    result.Title,
+		Level:    result.Level,
+	}
+
+	return &employeev1.CreatePositionResponse{
+		Position: pos,
 	}, nil
 }
 
@@ -278,26 +295,17 @@ func (s *EmployeeServiceServer) ListPositions(ctx context.Context, req *employee
 		return nil, status.Errorf(codes.Internal, "list positions failed: %v", err)
 	}
 
-	positions := make([]*employeev1.PositionResponse, len(result.Positions))
+	positions := make([]*employeev1.Position, len(result.Positions))
 	for i, pos := range result.Positions {
-		positions[i] = &employeev1.PositionResponse{
-			Id:          pos.ID,
-			Title:       pos.Title,
-			Description: pos.Description,
-			Level:       pos.Level,
+		positions[i] = &employeev1.Position{
+			Id:       pos.ID,
+			TenantId: req.TenantId,
+			Title:    pos.Title,
+			Level:    pos.Level,
 		}
 	}
 
 	return &employeev1.ListPositionsResponse{
 		Positions: positions,
-		Total:     result.Total,
 	}, nil
-}
-
-// Helper function to convert empty string to nil pointer.
-func getStringPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }

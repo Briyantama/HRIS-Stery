@@ -2,6 +2,7 @@
 -- Rollback: 001_create_employee_schema
 -- ============================================================
 
+DROP TABLE IF EXISTS employee.processed_events;
 DROP TABLE IF EXISTS employee.employees;
 DROP TABLE IF EXISTS employee.positions;
 DROP TABLE IF EXISTS employee.departments;

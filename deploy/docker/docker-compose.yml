@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ============================================================
 # HRIS-Stery — Local Development Environment
 # ============================================================
@@ -171,7 +169,7 @@ services:
   # Applications connect to PgBouncer on 6432, not Postgres directly.
   # ──────────────────────────────────────────────────────────
   pgbouncer:
-    image: pgbouncer/pgbouncer:1.23.1
+    image: pgbouncer/pgbouncer:latest
     container_name: hris-pgbouncer
     restart: unless-stopped
     environment:

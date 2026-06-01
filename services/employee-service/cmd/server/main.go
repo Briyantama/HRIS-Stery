@@ -10,6 +10,7 @@ import (
 	employeev1 "github.com/hris-stery/hris-stery/gen/go/hris/employee/v1"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/queries"
+	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure/postgres"
 	grpchandlers "github.com/hris-stery/hris-stery/services/employee-service/internal/interfaces/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,7 +53,10 @@ func main() {
 	positionRepo := postgres.NewPositionRepository(pool)
 
 	// Create event publisher
-	eventPub := &noopPublisher{} // TODO: Use NATSPublisher
+	eventPub, err := infrastructure.NewNATSPublisher(natsConn)
+	if err != nil {
+		log.Fatalf("initialize NATS publisher: %v", err)
+	}
 
 	// Create command handlers
 	createEmployeeHandler := commands.NewCreateEmployeeHandler(employeeRepo, departmentRepo, positionRepo, eventPub)
@@ -65,6 +69,13 @@ func main() {
 	listEmployeesHandler := queries.NewListEmployeesHandler(employeeRepo)
 	listDepartmentsHandler := queries.NewListDepartmentsHandler(departmentRepo)
 	listPositionsHandler := queries.NewListPositionsHandler(positionRepo)
+
+	// Create event consumer for user registration
+	consumer := infrastructure.NewUserRegisteredConsumer(pool, createEmployeeHandler, logger)
+	if err := consumer.Subscribe(natsConn); err != nil {
+		log.Fatalf("subscribe to events: %v", err)
+	}
+	defer consumer.Close()
 
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
@@ -96,15 +107,4 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-// noopPublisher is a temporary event publisher that does nothing.
-type noopPublisher struct{}
-
-func (n *noopPublisher) PublishAsync(ctx context.Context, event interface{}) error {
-	return nil
-}
-
-func (n *noopPublisher) PublishSync(ctx context.Context, event interface{}) error {
-	return nil
 }

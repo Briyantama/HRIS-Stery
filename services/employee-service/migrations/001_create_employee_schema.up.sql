@@ -132,3 +132,16 @@ CREATE POLICY tenant_isolation ON employee.employees
 
 GRANT SELECT, INSERT, UPDATE ON employee.employees TO hris_app;
 -- No DELETE — employees are terminated, never deleted (data integrity + audit).
+
+-- ────────────────────────────────────────────────────────────
+-- Table: processed_events (for NATS consumer idempotency)
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE employee.processed_events (
+    event_id     UUID PRIMARY KEY,
+    event_type   TEXT NOT NULL,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX processed_events_event_type_idx ON employee.processed_events (event_type);
+
+GRANT INSERT, SELECT ON employee.processed_events TO hris_app;
