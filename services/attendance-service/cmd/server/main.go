@@ -24,7 +24,7 @@ func main() {
 	ctx := context.Background()
 
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	dbURL := envOr("DATABASE_URL", "postgres://hris_app:hris_app_secret@localhost:6432/hris_db?sslmode=disable")
 	natsURL := envOr("NATS_URL", "nats://localhost:4222")

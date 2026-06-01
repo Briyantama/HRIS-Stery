@@ -58,10 +58,10 @@ func (r *LeaveBalanceRepository) GetByEmployeeAndType(ctx context.Context, tenan
 			WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3
 		`
 		var (
-			balanceID, empID, typeID string
-			queryYear                int
+			balanceID, empID, typeID            string
+			queryYear                           int
 			entitledDays, usedDays, pendingDays float64
-			createdAt, updatedAt     time.Time
+			createdAt, updatedAt                time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, employeeID.String(), leaveTypeID.String(), year).Scan(
 			&balanceID, &tenantID, &empID, &typeID, &queryYear, &entitledDays, &usedDays, &pendingDays, &createdAt, &updatedAt,
@@ -108,10 +108,10 @@ func (r *LeaveBalanceRepository) ListByEmployee(ctx context.Context, tenantID do
 
 		for rows.Next() {
 			var (
-				balanceID, empID, typeID string
-				queryYear                int
+				balanceID, empID, typeID            string
+				queryYear                           int
 				entitledDays, usedDays, pendingDays float64
-				createdAt, updatedAt     time.Time
+				createdAt, updatedAt                time.Time
 			)
 			if err := rows.Scan(
 				&balanceID, &tenantID, &empID, &typeID, &queryYear, &entitledDays, &usedDays, &pendingDays, &createdAt, &updatedAt,

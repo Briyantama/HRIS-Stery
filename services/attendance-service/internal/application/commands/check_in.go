@@ -11,14 +11,14 @@ import (
 
 // CheckInCommand represents the command to check an employee in.
 type CheckInCommand struct {
-	TenantID  string
+	TenantID   string
 	EmployeeID string
-	Date      time.Time
-	CheckInAt time.Time
-	Latitude  *float64
-	Longitude *float64
-	Notes     string
-	ActorID   string
+	Date       time.Time
+	CheckInAt  time.Time
+	Latitude   *float64
+	Longitude  *float64
+	Notes      string
+	ActorID    string
 }
 
 // CheckInHandler handles the check-in command.

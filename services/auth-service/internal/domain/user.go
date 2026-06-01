@@ -41,16 +41,16 @@ func NewUser(id UserID, tenantID TenantID, email, plainPassword, fullName string
 
 	now := time.Now().UTC()
 	return &User{
-		id:           id,
-		tenantID:     tenantID,
-		email:        email,
-		passwordHash: hash,
-		fullName:     fullName,
-		isActive:     true,
+		id:            id,
+		tenantID:      tenantID,
+		email:         email,
+		passwordHash:  hash,
+		fullName:      fullName,
+		isActive:      true,
 		emailVerified: false,
-		roleIDs:      []RoleID{},
-		createdAt:    now,
-		updatedAt:    now,
+		roleIDs:       []RoleID{},
+		createdAt:     now,
+		updatedAt:     now,
 	}, nil
 }
 
@@ -137,6 +137,7 @@ func RehydrateUser(
 	}
 	return user, nil
 }
+
 // Returns nil if the password matches, an error otherwise.
 func (u *User) VerifyPassword(plainPassword string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(u.passwordHash), []byte(plainPassword)); err != nil {

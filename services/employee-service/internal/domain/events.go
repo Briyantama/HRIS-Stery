@@ -15,8 +15,8 @@ type DomainEvent interface {
 
 // BaseDomainEvent contains common fields for all domain events.
 type BaseDomainEvent struct {
-	eventID   string
-	eventType string
+	eventID    string
+	eventType  string
 	occurredAt time.Time
 }
 

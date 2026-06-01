@@ -5,8 +5,9 @@
 **Overall:** 70% Complete (MVP Foundation Solid)
 
 ### Phase Completion
+
 - ✅ **Phase 1: Domain Layer** — 100% Complete
-- ✅ **Phase 2: Application Layer** — 100% Complete  
+- ✅ **Phase 2: Application Layer** — 100% Complete
 - ✅ **Phase 3: Infrastructure Layer** — 100% Complete
 - ✅ **Phase 4: Interfaces (gRPC)** — 100% Complete
 - ✅ **Phase 5: Unit & Application Tests** — 100% Complete
@@ -19,18 +20,21 @@
 ## 📋 What's Been Implemented
 
 ### **1. Domain Layer** ✅
+
 **Files:**
+
 - `internal/domain/tenant_id.go` — TenantID value object with validation
 - `internal/domain/employee_id.go` — Typed UUID wrapper for Employee IDs
 - `internal/domain/department_id.go` — Typed UUID wrapper for Department IDs
 - `internal/domain/position_id.go` — Typed UUID wrapper for Position IDs
 - `internal/domain/employee.go` — Employee aggregate with state transitions (Active → Terminated)
 - `internal/domain/department.go` — Department aggregate
-- `internal/domain/position.go` — Position aggregate  
+- `internal/domain/position.go` — Position aggregate
 - `internal/domain/events.go` — Domain event definitions (EmployeeCreatedEvent, EmployeeTerminatedEvent, EmployeeUpdatedEvent)
 - `internal/domain/repositories.go` — Repository port interfaces
 
 **Key Features:**
+
 - Clean aggregates with invariants (no business logic in application layer)
 - Value objects prevent raw string comparisons (TenantID, EmployeeID, etc.)
 - State machine for employee lifecycle (ACTIVE → TERMINATED, ACTIVE ↔ ON_LEAVE)
@@ -39,19 +43,23 @@
 **Tests:** 15 test cases covering validation, state transitions, and business rules
 
 ### **2. Application Layer** ✅
+
 **Commands (Write Side - CQRS):**
+
 - `CreateEmployeeCommand` — Validates uniqueness, publishes EmployeeCreatedEvent
 - `TerminateEmployeeCommand` — State transition with termination date
 - `CreateDepartmentCommand` — Department creation
 - `CreatePositionCommand` — Position creation
 
 **Queries (Read Side - CQRS):**
+
 - `GetEmployeeQuery` — Single employee retrieval
 - `ListEmployeesQuery` — Pagination + filtering (status, department, search)
 - `ListDepartmentsQuery` — Department listing
 - `ListPositionsQuery` — Position listing
 
 **Event System:**
+
 - Real NATS JetStream publisher (`infrastructure/nats_publisher.go`)
   - Converts domain events → standard envelope (event_id, event_type, tenant_id, actor_id, occurred_at, payload)
   - Publishes to NATS with subject taxonomy: `hris.workforce.employee.*`
@@ -66,7 +74,9 @@
 **Tests:** 8 unit tests with mocked repositories
 
 ### **3. Infrastructure Layer** ✅
+
 **Postgres Repositories:**
+
 - `internal/infrastructure/postgres/employee_repository.go`
   - Create, GetByID, GetByTenantAndEmail, Update, Delete, ListByTenant, GetByManager
   - All queries use `WithTenantTx()` for RLS enforcement
@@ -74,15 +84,16 @@
 
 - `internal/infrastructure/postgres/department_repository.go`
   - Full CRUD with RLS isolation
-  
 - `internal/infrastructure/postgres/position_repository.go`
   - Full CRUD with RLS isolation
 
 **NATS Integration:**
+
 - `nats_publisher.go` — Real JetStream publisher with event envelope handling
 - `nats_consumer.go` — User registration event consumer with idempotency
 
 **Database Migrations:**
+
 - `migrations/001_create_employee_schema.up.sql`
   - Schemas, enums (EmploymentStatus, ContractType, Gender)
   - Tables: employees, departments, positions, processed_events
@@ -94,11 +105,13 @@
   - Proper rollback with dependency order
 
 ### **4. gRPC Interfaces** ✅
+
 **File:** `internal/interfaces/grpc/employee_service.go`
 
 **Implemented RPCs:**
+
 - `CreateEmployee` → CreateEmployeeCommand
-- `GetEmployee` → GetEmployeeQuery  
+- `GetEmployee` → GetEmployeeQuery
 - `UpdateEmployee` → (handler mapped)
 - `TerminateEmployee` → TerminateEmployeeCommand
 - `ListEmployees` → ListEmployeesQuery with filtering
@@ -108,14 +121,17 @@
 - `ListPositions` → ListPositionsQuery
 
 **Error Handling:**
+
 - Validates required fields (returns `codes.InvalidArgument`)
 - Maps domain errors to gRPC status codes (`codes.NotFound`, `codes.Internal`)
 - No stack traces exposed to clients
 
 ### **5. Server Wiring** ✅
+
 **File:** `cmd/server/main.go`
 
 **Setup:**
+
 - Postgres connection pool (pgxpool)
 - NATS JetStream connection
 - Repository initialization
@@ -128,18 +144,21 @@
 ### **6. Tests** ✅
 
 **Domain Tests** (15 cases):
+
 - Employee validation (email, full name, department required)
 - Status transitions (Active → Terminated, Active ↔ OnLeave)
 - Department & Position creation
 - Employee termination with state invariants
 
 **Application Tests** (8 cases):
+
 - CreateEmployeeSuccess, CreateEmployeeDuplicateEmail
 - GetEmployeeSuccess, GetEmployeeNotFound
 - ListEmployeesSuccess (with mocked repos)
 - All with proper mocking at repository boundaries
 
 **Test Command:**
+
 ```bash
 go test ./services/employee-service/... -v
 # Result: ✓ All 23 tests passing
@@ -150,6 +169,7 @@ go test ./services/employee-service/... -v
 ## 🚀 What Remains for MVP Completion
 
 ### **Priority 1: Integration Tests** (High Impact)
+
 **Goal:** Verify full stack with real Postgres + NATS
 
 ```bash
@@ -158,16 +178,19 @@ make integration-test  # Will run with INTEGRATION=true go test ./internal/integ
 ```
 
 **Tests to Implement:**
+
 - ✅ `TestFullEmployeeLifecycle` — Create → Update → Terminate → List
 - ✅ `TestRLSIsolation` — Tenant A cannot read Tenant B's employees
 - ✅ `TestUserRegisteredEventConsumer` — Auth event triggers employee creation
 - ✅ `TestIdempotency` — Duplicate events create only one record
 
 **Expected Files:**
+
 - `internal/integration/integration_test.go` — Build tag: `//go:build integration`
 - Fixtures for tenant setup, postgres connection, NATS subscription
 
 ### **Priority 2: Docker Build Verification**
+
 **Goal:** Ensure production Docker image builds cleanly
 
 ```bash
@@ -176,6 +199,7 @@ docker build -f services/employee-service/Dockerfile -t employee-service:latest 
 ```
 
 **Dockerfile:**
+
 ```dockerfile
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
@@ -191,12 +215,14 @@ CMD ["server"]
 ```
 
 **Build Check:**
+
 - ✅ Multi-stage build reduces image size
 - ✅ No secrets in image layers
 - ✅ Minimal alpine base
 - ✅ All dependencies resolved via go.mod
 
 ### **Priority 3: Local E2E Testing via grpcurl**
+
 **Goal:** Manual gRPC testing against running service
 
 ```bash
@@ -228,6 +254,7 @@ grpcurl -plaintext \
 ```
 
 ### **Priority 4: RLS Verification**
+
 **Goal:** Confirm PostgreSQL row-level security blocks cross-tenant reads
 
 ```sql
@@ -240,6 +267,7 @@ SELECT * FROM employee.employees WHERE tenant_id = 'tenant-b-uuid';  -- Returns 
 ```
 
 ### **Priority 5: Idempotency Verification**
+
 **Goal:** Confirm NATS consumer handles duplicate delivery
 
 ```bash
@@ -256,29 +284,34 @@ SELECT COUNT(*) FROM employee.employees WHERE email = '...';  -- Should be 1, no
 ## 📊 Code Quality Metrics
 
 **Test Coverage:**
+
 - Domain: 15 test cases
 - Application: 8 test cases
 - Total: 23 passing tests ✅
 
 **Clean Architecture:**
+
 - Domain ← Application ← Infrastructure ← Interfaces (correct dependency direction)
 - No business logic in handlers or repositories
 - Repository ports properly abstracted
 - Value objects used everywhere (no raw strings for IDs or tenant_id)
 
 **NATS Integration:**
+
 - ✅ Real JetStream publisher (not no-op)
 - ✅ Standard event envelope (event_id UUID v7, tenant_id, actor_id, occurred_at, payload)
 - ✅ Idempotency table with PRIMARY KEY on event_id
 - ✅ Consumer properly wired in main.go
 
 **Error Handling:**
+
 - ✅ Domain validation with meaningful errors
 - ✅ gRPC status codes mapped correctly
 - ✅ Context propagation through all layers
 - ✅ Structured logging with tenant_id (ready for OpenTelemetry)
 
 **Security:**
+
 - ✅ PostgreSQL RLS on all tenant-scoped tables
 - ✅ WithTenantTx() enforcing RLS on every query
 - ✅ TenantID value object prevents injection
@@ -311,7 +344,7 @@ PASS: TestEmployeeUpdateDepartment
 
 ## 📁 File Structure
 
-```
+```bash
 services/employee-service/
 ├── cmd/
 │   └── server/
@@ -399,6 +432,7 @@ These are acceptable for MVP — all marked with TODO comments for Phase 2.
 ## 📝 Implementation Notes
 
 ### What Went Well
+
 - Domain-driven design caught validation issues early (email uniqueness per tenant)
 - Value objects (TenantID, EmployeeID) prevented raw string bugs
 - Real NATS publisher integrated cleanly following auth-service pattern
@@ -406,14 +440,16 @@ These are acceptable for MVP — all marked with TODO comments for Phase 2.
 - Mock-based unit tests run fast (0-5ms per test)
 
 ### What Needed Fixing
+
 - NATS consumer initially used `WithTenantTx()` on non-tenant-scoped table
 - gRPC handler had mismatched proto field names (fixed to match generated code)
 - Event publisher interface expected domain.DomainEvent type (improved test mocks)
 - Migrations had duplicate dependency issues (ordered correctly now)
 
 ### Design Decisions Justified
+
 - **Idempotency table not tenant-scoped:** Processed_events is a system table tracking which events ANY service has seen. Tenant isolation would limit functionality if events needed deduplication across tenants.
-- **Domain events in application layer:** Events are high-level domain concepts (EmployeeCreated), not infrastructure details. Publishing is a cross-cutting concern, but the *event design* belongs in domain.
+- **Domain events in application layer:** Events are high-level domain concepts (EmployeeCreated), not infrastructure details. Publishing is a cross-cutting concern, but the _event design_ belongs in domain.
 - **CreateEmployeeShell on user.registered:** Users registered in auth-service automatically get employee records in employee-service. This is enterprise-grade HR automation — not all users become employees, but registration is the trigger.
 
 ---

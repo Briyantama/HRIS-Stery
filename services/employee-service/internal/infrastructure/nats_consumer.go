@@ -15,10 +15,10 @@ import (
 
 // UserRegisteredEventPayload is the auth-service event payload.
 type UserRegisteredEventPayload struct {
-	UserID    string `json:"user_id"`
-	TenantID  string `json:"tenant_id"`
-	Email     string `json:"email"`
-	FullName  string `json:"full_name"`
+	UserID   string `json:"user_id"`
+	TenantID string `json:"tenant_id"`
+	Email    string `json:"email"`
+	FullName string `json:"full_name"`
 }
 
 // EventEnvelopeReceived wraps the incoming NATS event.
@@ -34,13 +34,13 @@ type EventEnvelopeReceived struct {
 
 // UserRegisteredConsumer subscribes to hris.identity.user.registered events.
 type UserRegisteredConsumer struct {
-	pool                     *pgxpool.Pool
-	createEmployeeHandler    *commands.CreateEmployeeHandler
-	logger                   *zap.Logger
-	mu                       sync.Mutex
-	sub                      *nats.Subscription
-	ctx                      context.Context
-	cancel                   context.CancelFunc
+	pool                  *pgxpool.Pool
+	createEmployeeHandler *commands.CreateEmployeeHandler
+	logger                *zap.Logger
+	mu                    sync.Mutex
+	sub                   *nats.Subscription
+	ctx                   context.Context
+	cancel                context.CancelFunc
 }
 
 // NewUserRegisteredConsumer creates a new consumer for user registration events.

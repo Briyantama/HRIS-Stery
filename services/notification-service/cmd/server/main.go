@@ -18,7 +18,10 @@ import (
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/queries"
 	infracons "github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/nats"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/postgres"
+	"github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/channels"
+	"github.com/hris-stery/hris-stery/services/notification-service/internal/health"
 	grpchandlers "github.com/hris-stery/hris-stery/services/notification-service/internal/interfaces/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -47,15 +50,40 @@ func main() {
 		}
 	}
 
+	// Parse SMTP configuration
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPortStr := os.Getenv("SMTP_PORT")
+	smtpPort := 587 // Default to TLS port
+	if smtpPortStr != "" {
+		if port, err := strconv.Atoi(smtpPortStr); err == nil {
+			smtpPort = port
+		}
+	}
+	smtpUser := os.Getenv("SMTP_USERNAME")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	smtpFromEmail := os.Getenv("SMTP_FROM_EMAIL")
+	if smtpFromEmail == "" {
+		smtpFromEmail = "noreply@hris.local"
+	}
+	smtpFromName := os.Getenv("SMTP_FROM_NAME")
+	if smtpFromName == "" {
+		smtpFromName = "HRIS System"
+	}
+	smtpTLSEnabled := os.Getenv("SMTP_TLS_ENABLED") != "false" // Default true
+	logger.Info("SMTP configuration loaded",
+		zap.String("smtp_host", smtpHost),
+		zap.Int("smtp_port", smtpPort),
+		zap.String("smtp_from_email", smtpFromEmail),
+		zap.Bool("smtp_tls_enabled", smtpTLSEnabled),
+	)
+
 	// Connect PostgreSQL
 	logger.Info("connecting to PostgreSQL", zap.String("database_url", databaseURL))
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		logger.Fatal("failed to connect PostgreSQL", zap.Error(err))
 	}
-	defer func() {
-		_ = pool.Close()
-	}()
+	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
 		logger.Fatal("failed to ping PostgreSQL", zap.Error(err))
@@ -68,9 +96,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to connect NATS", zap.Error(err))
 	}
-	defer func() {
-		_ = nc.Close()
-	}()
+	defer nc.Close()
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -81,6 +107,21 @@ func main() {
 	// Instantiate repositories
 	notificationRepo := postgres.NewNotificationRepository(pool)
 	channelConfigRepo := postgres.NewChannelConfigRepository(pool)
+
+	// Instantiate channel adapters (for future use in sending notifications)
+	emailAdapter := channels.NewEmailAdapter(
+		smtpHost,
+		smtpPort,
+		smtpUser,
+		smtpPassword,
+		smtpFromEmail,
+		smtpFromName,
+		smtpTLSEnabled,
+		logger,
+	)
+	inAppAdapter := channels.NewInAppAdapter()
+	_ = emailAdapter   // Placeholder for future use
+	_ = inAppAdapter   // Placeholder for future use
 
 	// Instantiate command handlers
 	sendHandler := commands.NewSendNotificationHandler(notificationRepo)
@@ -127,6 +168,11 @@ func main() {
 		getChannelConfigHandler,
 	)
 	pb.RegisterNotificationServiceServer(grpcServer, notificationService)
+
+	// Register health check service
+	healthService := health.NewHealthService(pool, nc, logger)
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthService)
+	logger.Info("gRPC Health service registered")
 
 	// Start gRPC server
 	logger.Info("starting gRPC server", zap.Int("port", grpcPort))

@@ -11,17 +11,17 @@ type DomainEvent interface {
 
 // LeaveRequestedEvent is published when a leave request is created.
 type LeaveRequestedEvent struct {
-	eventID       string
-	eventType     string
-	tenantID      TenantID
-	employeeID    EmployeeID
+	eventID        string
+	eventType      string
+	tenantID       TenantID
+	employeeID     EmployeeID
 	leaveRequestID LeaveRequestID
-	leaveTypeID   LeaveTypeID
-	startDate     time.Time
-	endDate       time.Time
-	daysCount     int
-	reason        string
-	occurredAt    time.Time
+	leaveTypeID    LeaveTypeID
+	startDate      time.Time
+	endDate        time.Time
+	daysCount      int
+	reason         string
+	occurredAt     time.Time
 }
 
 // NewLeaveRequestedEvent creates a new leave requested event.
@@ -135,13 +135,13 @@ func (e *LeaveApprovedEvent) ApprovedByID() EmployeeID {
 
 // LeaveRejectedEvent is published when a leave request is rejected.
 type LeaveRejectedEvent struct {
-	eventID        string
-	eventType      string
-	tenantID       TenantID
-	employeeID     EmployeeID
-	leaveRequestID LeaveRequestID
+	eventID         string
+	eventType       string
+	tenantID        TenantID
+	employeeID      EmployeeID
+	leaveRequestID  LeaveRequestID
 	rejectionReason string
-	occurredAt     time.Time
+	occurredAt      time.Time
 }
 
 // NewLeaveRejectedEvent creates a new leave rejected event.
@@ -243,16 +243,16 @@ func (e *LeaveCancelledEvent) LeaveRequestID() LeaveRequestID {
 
 // LeaveBalanceUpdatedEvent is published when a leave balance is updated.
 type LeaveBalanceUpdatedEvent struct {
-	eventID       string
-	eventType     string
-	tenantID      TenantID
-	employeeID    EmployeeID
-	leaveTypeID   LeaveTypeID
-	year          int
-	entitledDays  float64
-	usedDays      float64
-	pendingDays   float64
-	occurredAt    time.Time
+	eventID      string
+	eventType    string
+	tenantID     TenantID
+	employeeID   EmployeeID
+	leaveTypeID  LeaveTypeID
+	year         int
+	entitledDays float64
+	usedDays     float64
+	pendingDays  float64
+	occurredAt   time.Time
 }
 
 // NewLeaveBalanceUpdatedEvent creates a new leave balance updated event.

@@ -9,10 +9,10 @@ import (
 type PositionLevel string
 
 const (
-	LevelJunior   PositionLevel = "JUNIOR"
-	LevelSenior   PositionLevel = "SENIOR"
-	LevelLead     PositionLevel = "LEAD"
-	LevelManager  PositionLevel = "MANAGER"
+	LevelJunior  PositionLevel = "JUNIOR"
+	LevelSenior  PositionLevel = "SENIOR"
+	LevelLead    PositionLevel = "LEAD"
+	LevelManager PositionLevel = "MANAGER"
 )
 
 // IsValid returns true if the level is a valid PositionLevel.

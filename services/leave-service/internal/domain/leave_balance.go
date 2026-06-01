@@ -6,16 +6,16 @@ import (
 
 // LeaveBalance tracks leave entitlements per employee per leave type per year.
 type LeaveBalance struct {
-	id             LeaveBalanceID
-	tenantID       TenantID
-	employeeID     EmployeeID
-	leaveTypeID    LeaveTypeID
-	year           int
-	entitledDays   float64
-	usedDays       float64
-	pendingDays    float64
-	createdAt      time.Time
-	updatedAt      time.Time
+	id           LeaveBalanceID
+	tenantID     TenantID
+	employeeID   EmployeeID
+	leaveTypeID  LeaveTypeID
+	year         int
+	entitledDays float64
+	usedDays     float64
+	pendingDays  float64
+	createdAt    time.Time
+	updatedAt    time.Time
 }
 
 // NewLeaveBalance creates a new leave balance.

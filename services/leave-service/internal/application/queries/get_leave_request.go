@@ -27,20 +27,20 @@ func NewGetLeaveRequestHandler(leaveRequestRepo domain.LeaveRequestRepository) *
 
 // LeaveRequestDTO is the data transfer object for leave requests.
 type LeaveRequestDTO struct {
-	ID               string  `json:"id"`
-	TenantID         string  `json:"tenant_id"`
-	EmployeeID       string  `json:"employee_id"`
-	LeaveTypeID      string  `json:"leave_type_id"`
-	StartDate        string  `json:"start_date"`
-	EndDate          string  `json:"end_date"`
-	DaysCount        int     `json:"days_count"`
-	Status           string  `json:"status"`
-	Reason           string  `json:"reason"`
-	RejectionReason  string  `json:"rejection_reason,omitempty"`
-	ApprovedByID     *string `json:"approved_by_id,omitempty"`
-	ApprovedAt       *string `json:"approved_at,omitempty"`
-	CreatedAt        string  `json:"created_at"`
-	UpdatedAt        string  `json:"updated_at"`
+	ID              string  `json:"id"`
+	TenantID        string  `json:"tenant_id"`
+	EmployeeID      string  `json:"employee_id"`
+	LeaveTypeID     string  `json:"leave_type_id"`
+	StartDate       string  `json:"start_date"`
+	EndDate         string  `json:"end_date"`
+	DaysCount       int     `json:"days_count"`
+	Status          string  `json:"status"`
+	Reason          string  `json:"reason"`
+	RejectionReason string  `json:"rejection_reason,omitempty"`
+	ApprovedByID    *string `json:"approved_by_id,omitempty"`
+	ApprovedAt      *string `json:"approved_at,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 // Handle retrieves a leave request.

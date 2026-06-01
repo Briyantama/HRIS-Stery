@@ -52,9 +52,9 @@ func (r *PositionRepository) GetByID(ctx context.Context, tenantID domain.Tenant
 			WHERE id = $1
 		`
 		var (
-			posID string
+			posID              string
 			title, desc, level string
-			createdAt time.Time
+			createdAt          time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(&posID, &tenantID, &title, &desc, &level, &createdAt)
 		if rowErr == pgx.ErrNoRows {
@@ -99,9 +99,9 @@ func (r *PositionRepository) ListByTenant(ctx context.Context, tenantID domain.T
 
 		for rows.Next() {
 			var (
-				posID string
+				posID              string
 				title, desc, level string
-				createdAt time.Time
+				createdAt          time.Time
 			)
 			if err := rows.Scan(&posID, &tenantID, &title, &desc, &level, &createdAt); err != nil {
 				return fmt.Errorf("scan position: %w", err)

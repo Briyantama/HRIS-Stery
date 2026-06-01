@@ -25,8 +25,11 @@ type ChannelConfigRepository interface {
 }
 
 type RenderResult struct {
-	Subject string
-	Body    string
+	Subject         string
+	Body            string
+	RecipientEmail  string // Email address for delivery (resolved from user ID)
+	RecipientName   string // Recipient name for personalization
+	PlainTextBody   string // Plain text fallback for email
 }
 
 type NotificationChannelAdapter interface {

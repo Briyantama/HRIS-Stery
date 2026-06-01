@@ -11,6 +11,7 @@ Leave-service is implemented as a production-grade Phase 1 service following cle
 ## Deliverables
 
 ### Layer 1: Proto Contract ✓
+
 - **File:** `proto/hris/leave/v1/leave.proto`
 - **Status:** COMPLETE
 - **Contains:**
@@ -20,7 +21,9 @@ Leave-service is implemented as a production-grade Phase 1 service following cle
   - Standard envelope for event publishing
 
 ### Layer 2: Domain ✓
+
 **Files Created:** 8 files (~900 LOC)
+
 - leave_request_id.go - TypedUUID wrapper
 - leave_type_id.go - TypedUUID wrapper  
 - leave_balance_id.go - TypedUUID wrapper
@@ -34,7 +37,9 @@ Leave-service is implemented as a production-grade Phase 1 service following cle
 **Test Results:** 10/10 PASS ✓
 
 ### Layer 3: Application (CQRS) ✓
+
 **Files Created:** 9 files (~800 LOC)
+
 - 4 command handlers with orchestration
 - 4 query handlers with read-side logic
 - Full mock implementations for testing
@@ -42,31 +47,39 @@ Leave-service is implemented as a production-grade Phase 1 service following cle
 **Test Results:** 3/3 PASS ✓
 
 ### Layer 4: Infrastructure ✓
+
 **Files Created:** 8 files (~700 LOC)
+
 - 3 PostgreSQL repositories with RLS enforcement
 - 1 NATS event publisher with standard envelope
 - 1 employee-created event consumer with idempotency
 - 2 reversible database migrations
 
 **RLS Verification:**
+
 - WithTenantTx() wraps all tenant-scoped operations
 - processed_events table has NO RLS (idempotency)
 - All queries execute within proper tenant context
 
 ### Layer 5: Interfaces (gRPC) ✓
+
 **Files Created:** 1 file (~140 LOC)
+
 - All 8 RPC methods with correct proto signatures
 - Helper functions for status conversion
 - Thin handlers (ready for wiring)
 
 ### Layer 6: Server Wiring ✓
+
 **Files Created:** 1 file (~40 LOC)
+
 - cmd/server/main.go with gRPC server setup
 - Environment configuration support
 
 ## Build Status
 
 ### Compilation ✓
+
 ```
 go build -v ./cmd/server/
 Result: SUCCESS
@@ -74,6 +87,7 @@ Binary Size: 17MB
 ```
 
 ### Dependencies ✓
+
 - Go 1.24+
 - uuid, pgx/v5, nats-go, zap, grpc, protobuf
 - All dependencies resolved
@@ -81,12 +95,14 @@ Binary Size: 17MB
 ## Test Results
 
 ### Unit Tests: 13/13 PASS ✓
+
 - 10 domain layer tests
 - 3 application layer tests
 - 0 failures
 - No regressions from previous implementation
 
 ### Test Execution
+
 ```bash
 go test -v ./internal/domain/... ./internal/application/...
 ```

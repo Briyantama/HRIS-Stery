@@ -16,12 +16,12 @@ import (
 // AuthServiceServer implements authv1.AuthServiceServer.
 type AuthServiceServer struct {
 	authv1.UnimplementedAuthServiceServer
-	loginHandler            *commands.LoginHandler
-	refreshTokenHandler     *commands.RefreshTokenHandler
-	revokeTokenHandler      *commands.RevokeTokenHandler
-	registerTenantHandler   *commands.RegisterTenantHandler
-	validateTokenHandler    *queries.ValidateTokenHandler
-	getPermissionsHandler   *queries.GetPermissionsHandler
+	loginHandler          *commands.LoginHandler
+	refreshTokenHandler   *commands.RefreshTokenHandler
+	revokeTokenHandler    *commands.RevokeTokenHandler
+	registerTenantHandler *commands.RegisterTenantHandler
+	validateTokenHandler  *queries.ValidateTokenHandler
+	getPermissionsHandler *queries.GetPermissionsHandler
 }
 
 // NewAuthServiceServer creates a new auth service gRPC server.

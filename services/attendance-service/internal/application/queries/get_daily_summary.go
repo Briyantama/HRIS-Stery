@@ -28,15 +28,15 @@ func NewGetDailySummaryHandler(attendanceRepo domain.AttendanceRepository) *GetD
 
 // DailySummaryResult contains attendance summary for a specific date.
 type DailySummaryResult struct {
-	Date             string `json:"date"`
-	TenantID         string `json:"tenant_id"`
-	TotalEmployees   int    `json:"total_employees"`
-	PresentCount     int    `json:"present_count"`
-	AbsentCount      int    `json:"absent_count"`
-	LateCount        int    `json:"late_count"`
-	HalfDayCount     int    `json:"half_day_count"`
-	OnLeaveCount     int    `json:"on_leave_count"`
-	AverageWorkMins  int    `json:"average_work_mins"`
+	Date            string `json:"date"`
+	TenantID        string `json:"tenant_id"`
+	TotalEmployees  int    `json:"total_employees"`
+	PresentCount    int    `json:"present_count"`
+	AbsentCount     int    `json:"absent_count"`
+	LateCount       int    `json:"late_count"`
+	HalfDayCount    int    `json:"half_day_count"`
+	OnLeaveCount    int    `json:"on_leave_count"`
+	AverageWorkMins int    `json:"average_work_mins"`
 }
 
 // Handle retrieves a daily attendance summary.

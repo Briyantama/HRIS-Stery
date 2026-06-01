@@ -52,9 +52,9 @@ func (r *DepartmentRepository) GetByID(ctx context.Context, tenantID domain.Tena
 			WHERE id = $1
 		`
 		var (
-			deptID   string
-			name, desc string
-			headID   *string
+			deptID               string
+			name, desc           string
+			headID               *string
 			createdAt, updatedAt time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(&deptID, &tenantID, &name, &desc, &headID, &createdAt, &updatedAt)
@@ -106,9 +106,9 @@ func (r *DepartmentRepository) ListByTenant(ctx context.Context, tenantID domain
 
 		for rows.Next() {
 			var (
-				deptID   string
-				name, desc string
-				headID   *string
+				deptID               string
+				name, desc           string
+				headID               *string
 				createdAt, updatedAt time.Time
 			)
 			if err := rows.Scan(&deptID, &tenantID, &name, &desc, &headID, &createdAt, &updatedAt); err != nil {

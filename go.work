@@ -1,12 +1,13 @@
-go 1.24
+go 1.25.0
 
 use (
+	./gen/go
+	./services/_shared
+	./services/attendance-service
 	./services/auth-service
 	./services/employee-service
-	./services/attendance-service
 	./services/leave-service
-	// ./services/notification-service
-	// ./services/audit-service
-	// ./services/ai-service
-	./services/_shared
+	./services/notification-service
+// ./services/audit-service
+// ./services/ai-service
 )

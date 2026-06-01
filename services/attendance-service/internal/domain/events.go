@@ -11,15 +11,15 @@ type DomainEvent interface {
 
 // AttendanceCheckedInEvent is published when an employee checks in.
 type AttendanceCheckedInEvent struct {
-	eventID    string
-	eventType  string
-	tenantID   TenantID
-	employeeID EmployeeID
+	eventID      string
+	eventType    string
+	tenantID     TenantID
+	employeeID   EmployeeID
 	attendanceID AttendanceID
-	checkInAt  time.Time
-	latitude   *float64
-	longitude  *float64
-	occurredAt time.Time
+	checkInAt    time.Time
+	latitude     *float64
+	longitude    *float64
+	occurredAt   time.Time
 }
 
 // NewAttendanceCheckedInEvent creates a new check-in event.
@@ -33,15 +33,15 @@ func NewAttendanceCheckedInEvent(
 	longitude *float64,
 ) *AttendanceCheckedInEvent {
 	return &AttendanceCheckedInEvent{
-		eventID:       eventID,
-		eventType:     "hris.attendance.record.checked_in",
-		tenantID:      tenantID,
-		employeeID:    employeeID,
-		attendanceID:  attendanceID,
-		checkInAt:     checkInAt,
-		latitude:      latitude,
-		longitude:     longitude,
-		occurredAt:    time.Now().UTC(),
+		eventID:      eventID,
+		eventType:    "hris.attendance.record.checked_in",
+		tenantID:     tenantID,
+		employeeID:   employeeID,
+		attendanceID: attendanceID,
+		checkInAt:    checkInAt,
+		latitude:     latitude,
+		longitude:    longitude,
+		occurredAt:   time.Now().UTC(),
 	}
 }
 
@@ -79,16 +79,16 @@ func (e *AttendanceCheckedInEvent) Location() (*float64, *float64) {
 
 // AttendanceCheckedOutEvent is published when an employee checks out.
 type AttendanceCheckedOutEvent struct {
-	eventID      string
-	eventType    string
-	tenantID     TenantID
-	employeeID   EmployeeID
-	attendanceID AttendanceID
-	checkOutAt   time.Time
-	latitude     *float64
-	longitude    *float64
+	eventID          string
+	eventType        string
+	tenantID         TenantID
+	employeeID       EmployeeID
+	attendanceID     AttendanceID
+	checkOutAt       time.Time
+	latitude         *float64
+	longitude        *float64
 	workDurationMins int
-	occurredAt   time.Time
+	occurredAt       time.Time
 }
 
 // NewAttendanceCheckedOutEvent creates a new check-out event.

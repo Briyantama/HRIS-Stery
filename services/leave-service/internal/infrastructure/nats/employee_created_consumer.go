@@ -13,11 +13,11 @@ import (
 
 // EmployeeCreatedConsumer processes employee creation events and initializes leave balances.
 type EmployeeCreatedConsumer struct {
-	js                    jetstream.JetStream
-	pool                  *pgxpool.Pool
-	leaveBalanceRepo      domain.LeaveBalanceRepository
-	leaveTypeRepo         domain.LeaveTypeRepository
-	employeeCreatedEvent  chan struct{}
+	js                   jetstream.JetStream
+	pool                 *pgxpool.Pool
+	leaveBalanceRepo     domain.LeaveBalanceRepository
+	leaveTypeRepo        domain.LeaveTypeRepository
+	employeeCreatedEvent chan struct{}
 }
 
 // EmployeeCreatedPayload represents the payload of hris.workforce.employee.created event.
@@ -37,10 +37,10 @@ func NewEmployeeCreatedConsumer(
 	leaveTypeRepo domain.LeaveTypeRepository,
 ) *EmployeeCreatedConsumer {
 	return &EmployeeCreatedConsumer{
-		js:               js,
-		pool:             pool,
-		leaveBalanceRepo: leaveBalanceRepo,
-		leaveTypeRepo:    leaveTypeRepo,
+		js:                   js,
+		pool:                 pool,
+		leaveBalanceRepo:     leaveBalanceRepo,
+		leaveTypeRepo:        leaveTypeRepo,
 		employeeCreatedEvent: make(chan struct{}, 100),
 	}
 }

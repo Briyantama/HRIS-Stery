@@ -33,7 +33,7 @@ type AttendanceRepository interface {
 // AttendanceFilters defines optional filters for querying attendance records.
 type AttendanceFilters struct {
 	EmployeeID   *EmployeeID
-	DepartmentID *string       // From employee-service via gRPC
+	DepartmentID *string // From employee-service via gRPC
 	DateFrom     *time.Time
 	DateTo       *time.Time
 	Status       *AttendanceStatus

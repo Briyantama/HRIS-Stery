@@ -6,15 +6,15 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/hris-stery/hris-stery/services/leave-service/internal/interfaces/grpc"
 	pb "github.com/hris-stery/hris-stery/gen/go/hris/leave/v1"
+	"github.com/hris-stery/hris-stery/services/leave-service/internal/interfaces/grpc"
 	"go.uber.org/zap"
 	grpcsrv "google.golang.org/grpc"
 )
 
 func main() {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	grpcPort := 50054
 	if port, err := strconv.Atoi(os.Getenv("GRPC_PORT")); err == nil {

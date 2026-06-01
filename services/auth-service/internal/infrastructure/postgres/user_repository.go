@@ -57,10 +57,10 @@ func (r *UserRepository) GetByID(ctx context.Context, tenantID domain.TenantID, 
 		`
 		var (
 			userID, tenantIDStr, email, passwordHash, fullName string
-			isActive, emailVerified                           bool
-			lastLoginAt                                       *time.Time
-			lastLoginIP                                       *string
-			createdAt, updatedAt                              time.Time
+			isActive, emailVerified                            bool
+			lastLoginAt                                        *time.Time
+			lastLoginIP                                        *string
+			createdAt, updatedAt                               time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
 			&userID, &tenantIDStr, &email, &passwordHash, &fullName,
@@ -106,10 +106,10 @@ func (r *UserRepository) GetByTenantAndEmail(ctx context.Context, tenantID domai
 		`
 		var (
 			userID, tenantIDStr, emailVal, passwordHash, fullName string
-			isActive, emailVerified                                bool
-			lastLoginAt                                            *time.Time
-			lastLoginIP                                            *string
-			createdAt, updatedAt                                   time.Time
+			isActive, emailVerified                               bool
+			lastLoginAt                                           *time.Time
+			lastLoginIP                                           *string
+			createdAt, updatedAt                                  time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, tenantID.String(), email).Scan(
 			&userID, &tenantIDStr, &emailVal, &passwordHash, &fullName,

@@ -15,8 +15,8 @@ type DomainEvent interface {
 
 // BaseDomainEvent provides common event fields.
 type BaseDomainEvent struct {
-	eventID   string
-	eventType string
+	eventID    string
+	eventType  string
 	occurredAt time.Time
 }
 
@@ -87,10 +87,10 @@ func NewUserLoggedInEvent(tenantID TenantID, userID UserID, email, ipAddr string
 // UserLoginFailedEvent fires when login fails (invalid credentials, inactive user, etc.).
 type UserLoginFailedEvent struct {
 	BaseDomainEvent
-	Email    string
+	Email      string
 	TenantSlug string
-	Reason   string
-	IPAddr   string
+	Reason     string
+	IPAddr     string
 }
 
 // NewUserLoginFailedEvent creates the event.

@@ -132,12 +132,12 @@ func TestListEmployeesSuccess(t *testing.T) {
 
 	handler := NewListEmployeesHandler(repo)
 	query := ListEmployeesQuery{
-		TenantID:   tenantID.String(),
-		Status:     nil,
+		TenantID:     tenantID.String(),
+		Status:       nil,
 		DepartmentID: nil,
-		SearchText: "",
-		Offset:     0,
-		Limit:      10,
+		SearchText:   "",
+		Offset:       0,
+		Limit:        10,
 	}
 
 	result, err := handler.Handle(ctx, query)

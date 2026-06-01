@@ -27,23 +27,23 @@ func NewGetAttendanceHandler(attendanceRepo domain.AttendanceRepository) *GetAtt
 
 // AttendanceDTO is the data transfer object for attendance records.
 type AttendanceDTO struct {
-	ID               string  `json:"id"`
-	TenantID         string  `json:"tenant_id"`
-	EmployeeID       string  `json:"employee_id"`
-	Date             string  `json:"date"`
-	CheckInAt        *string `json:"check_in_at"`
-	CheckOutAt       *string `json:"check_out_at"`
-	CheckInLatitude  *float64 `json:"check_in_latitude"`
-	CheckInLongitude *float64 `json:"check_in_longitude"`
+	ID                string   `json:"id"`
+	TenantID          string   `json:"tenant_id"`
+	EmployeeID        string   `json:"employee_id"`
+	Date              string   `json:"date"`
+	CheckInAt         *string  `json:"check_in_at"`
+	CheckOutAt        *string  `json:"check_out_at"`
+	CheckInLatitude   *float64 `json:"check_in_latitude"`
+	CheckInLongitude  *float64 `json:"check_in_longitude"`
 	CheckOutLatitude  *float64 `json:"check_out_latitude"`
 	CheckOutLongitude *float64 `json:"check_out_longitude"`
-	Status           string  `json:"status"`
-	WorkDurationMins *int    `json:"work_duration_mins"`
-	Notes            string  `json:"notes"`
-	CreatedBy        string  `json:"created_by"`
-	IsOverride       bool    `json:"is_override"`
-	CreatedAt        string  `json:"created_at"`
-	UpdatedAt        string  `json:"updated_at"`
+	Status            string   `json:"status"`
+	WorkDurationMins  *int     `json:"work_duration_mins"`
+	Notes             string   `json:"notes"`
+	CreatedBy         string   `json:"created_by"`
+	IsOverride        bool     `json:"is_override"`
+	CreatedAt         string   `json:"created_at"`
+	UpdatedAt         string   `json:"updated_at"`
 }
 
 // Handle retrieves an attendance record.

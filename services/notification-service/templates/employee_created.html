@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #d1ecf1; padding: 20px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #bee5eb; }
+        .content { padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .footer { margin-top: 20px; font-size: 12px; color: #666; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to HRIS System</h1>
+        </div>
+        <div class="content">
+            <p>Hi {{.RecipientName}},</p>
+            <p>Your profile has been created in the HRIS system. You now have access to:</p>
+
+            <ul>
+                <li>Leave management</li>
+                <li>Attendance tracking</li>
+                <li>Employee information</li>
+                <li>Notifications and updates</li>
+            </ul>
+
+            <h3>Your Information:</h3>
+            <ul>
+                <li><strong>Employee ID:</strong> {{.EmployeeID}}</li>
+                <li><strong>Department:</strong> {{.Department}}</li>
+                <li><strong>Position:</strong> {{.Position}}</li>
+                <li><strong>Manager:</strong> {{.ManagerName}}</li>
+            </ul>
+
+            <p>You can access the system using your email address and password.</p>
+
+            <a href="{{.LoginLink}}" class="button">Access HRIS System</a>
+        </div>
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; 2026 HRIS System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

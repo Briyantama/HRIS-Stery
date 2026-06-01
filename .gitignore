@@ -32,6 +32,7 @@ apps/api-gateway/bootstrap/cache/
 
 # Docker
 *.log
+.make-validate/
 
 # IDE
 .vscode/

@@ -2,86 +2,82 @@ syntax = "proto3";
 
 package hris.audit.v1;
 
-import "google/api/annotations.proto";
-import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/audit/v1;auditv1";
 
-// AuditEvent is the canonical record of every significant action in the system.
-// The audit.audit_events table is INSERT-ONLY (enforced by PostgreSQL RLS).
-message AuditEvent {
-  string id          = 1;  // UUID v7
-  string tenant_id   = 2;
-  string actor_id    = 3;  // user who performed the action; "system" for automated actions
-  string actor_email = 4;  // denormalized for readability
-
-  string event_type  = 5;  // matches NATS subject, e.g. "hris.workforce.employee.created"
-  string entity_type = 6;  // e.g. "employee", "leave_request"
-  string entity_id   = 7;  // the ID of the affected entity
-
-  // before/after captures the diff for update operations.
-  // Sensitive fields (passwords, tax IDs) must be redacted before recording.
-  google.protobuf.Struct before = 8;
-  google.protobuf.Struct after  = 9;
-
-  string ip_address  = 10;
-  string user_agent  = 11;
-  string request_id  = 12;  // correlates with OpenTelemetry trace ID
-
-  google.protobuf.Timestamp occurred_at = 13;
-}
-
-message RecordAuditEventRequest {
-  string tenant_id   = 1;
-  string actor_id    = 2;
-  string actor_email = 3;
-  string event_type  = 4;
-  string entity_type = 5;
-  string entity_id   = 6;
-  google.protobuf.Struct before = 7;
-  google.protobuf.Struct after  = 8;
-  string ip_address  = 9;
-  string user_agent  = 10;
-  string request_id  = 11;
-  google.protobuf.Timestamp occurred_at = 12;
-}
-
-message RecordAuditEventResponse {}
-
-message QueryAuditLogRequest {
-  string tenant_id   = 1;
-  string entity_type = 2;
-  string entity_id   = 3;
-  string actor_id    = 4;
-  string event_type  = 5;
-  google.protobuf.Timestamp from = 6;
-  google.protobuf.Timestamp to   = 7;
-  int32  page_size   = 8;
-  string page_token  = 9;
-}
-
-message QueryAuditLogResponse {
-  repeated AuditEvent events = 1;
-  string next_page_token     = 2;
-  int32  total_count         = 3;
-}
-
 service AuditService {
-  // RecordAuditEvent is called by the audit-service NATS consumer internally.
-  // External callers should publish to NATS; audit-service consumes and records.
-  // This RPC is for internal use only.
-  rpc RecordAuditEvent(RecordAuditEventRequest) returns (RecordAuditEventResponse) {
-    option (google.api.http) = {
-      post: "/v1/audit/events"
-      body: "*"
-    };
-  }
+  rpc Record(RecordAuditRequest) returns (RecordAuditResponse);
+  rpc Query(QueryAuditRequest) returns (QueryAuditResponse);
+  rpc GetEntry(GetAuditEntryRequest) returns (AuditEntry);
+}
 
-  // QueryAuditLog is called by authorized HR Admins through the gateway.
-  rpc QueryAuditLog(QueryAuditLogRequest) returns (QueryAuditLogResponse) {
-    option (google.api.http) = {
-      get: "/v1/audit/events"
-    };
-  }
+enum AuditAction {
+  AUDIT_ACTION_UNSPECIFIED = 0;
+  LOGIN = 1;
+  LOGOUT = 2;
+  EMPLOYEE_CREATED = 10;
+  EMPLOYEE_TERMINATED = 11;
+  LEAVE_REQUESTED = 20;
+  LEAVE_APPROVED = 21;
+  NOTIFICATION_SENT = 30;
+}
+
+enum ResourceType {
+  RESOURCE_TYPE_UNSPECIFIED = 0;
+  USER = 1;
+  EMPLOYEE = 2;
+  LEAVE = 3;
+  NOTIFICATION = 4;
+}
+
+message AuditEntry {
+  string entry_id = 1;
+  string tenant_id = 2;
+  string actor_id = 3;
+  AuditAction action = 4;
+  ResourceType resource_type = 5;
+  string resource_id = 6;
+  string description = 7;
+  bool success = 8;
+  string error_message = 9;
+  map<string, string> changes = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message RecordAuditRequest {
+  string tenant_id = 1;
+  string actor_id = 2;
+  AuditAction action = 3;
+  ResourceType resource_type = 4;
+  string resource_id = 5;
+  string description = 6;
+  bool success = 7;
+  string error_message = 8;
+  map<string, string> changes = 9;
+}
+
+message RecordAuditResponse {
+  string entry_id = 1;
+  google.protobuf.Timestamp created_at = 2;
+}
+
+message QueryAuditRequest {
+  string tenant_id = 1;
+  string actor_id = 2;
+  AuditAction action = 3;
+  ResourceType resource_type = 4;
+  string resource_id = 5;
+  int32 limit = 6;
+  int32 offset = 7;
+}
+
+message QueryAuditResponse {
+  repeated AuditEntry entries = 1;
+  int32 total_count = 2;
+}
+
+message GetAuditEntryRequest {
+  string tenant_id = 1;
+  string entry_id = 2;
 }

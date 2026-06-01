@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
 )
 
 // PermissionRepository implements domain.PermissionRepository using PostgreSQL.

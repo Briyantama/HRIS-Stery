@@ -75,17 +75,17 @@ func NewLeaveRequest(
 
 	now := time.Now().UTC()
 	return &LeaveRequest{
-		id:         GenerateLeaveRequestID(),
-		tenantID:   tenantID,
-		employeeID: employeeID,
+		id:          GenerateLeaveRequestID(),
+		tenantID:    tenantID,
+		employeeID:  employeeID,
 		leaveTypeID: leaveTypeID,
-		startDate:  startDate,
-		endDate:    endDate,
-		daysCount:  daysCount,
-		status:     StatusPending,
-		reason:     reason,
-		createdAt:  now,
-		updatedAt:  now,
+		startDate:   startDate,
+		endDate:     endDate,
+		daysCount:   daysCount,
+		status:      StatusPending,
+		reason:      reason,
+		createdAt:   now,
+		updatedAt:   now,
 	}, nil
 }
 

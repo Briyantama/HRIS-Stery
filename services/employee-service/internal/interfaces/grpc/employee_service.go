@@ -14,14 +14,14 @@ import (
 // EmployeeServiceServer implements employeev1.EmployeeServiceServer.
 type EmployeeServiceServer struct {
 	employeev1.UnimplementedEmployeeServiceServer
-	createEmployeeHandler     *commands.CreateEmployeeHandler
-	terminateEmployeeHandler  *commands.TerminateEmployeeHandler
-	createDepartmentHandler   *commands.CreateDepartmentHandler
-	createPositionHandler     *commands.CreatePositionHandler
-	getEmployeeHandler        *queries.GetEmployeeHandler
-	listEmployeesHandler      *queries.ListEmployeesHandler
-	listDepartmentsHandler    *queries.ListDepartmentsHandler
-	listPositionsHandler      *queries.ListPositionsHandler
+	createEmployeeHandler    *commands.CreateEmployeeHandler
+	terminateEmployeeHandler *commands.TerminateEmployeeHandler
+	createDepartmentHandler  *commands.CreateDepartmentHandler
+	createPositionHandler    *commands.CreatePositionHandler
+	getEmployeeHandler       *queries.GetEmployeeHandler
+	listEmployeesHandler     *queries.ListEmployeesHandler
+	listDepartmentsHandler   *queries.ListDepartmentsHandler
+	listPositionsHandler     *queries.ListPositionsHandler
 }
 
 // NewEmployeeServiceServer creates a new employee service gRPC server.
@@ -149,8 +149,8 @@ func (s *EmployeeServiceServer) ListEmployees(ctx context.Context, req *employee
 	}
 
 	return &employeev1.ListEmployeesResponse{
-		Employees:    employees,
-		TotalCount:   int32(result.Total),
+		Employees:     employees,
+		TotalCount:    int32(result.Total),
 		NextPageToken: "", // TODO: Implement pagination tokens
 	}, nil
 }
@@ -181,10 +181,10 @@ func (s *EmployeeServiceServer) TerminateEmployee(ctx context.Context, req *empl
 	}
 
 	emp := &employeev1.Employee{
-		Id:               result.EmployeeID,
-		TenantId:         req.TenantId,
-		Email:            result.Email,
-		TerminationDate:  terminationDate.Format(time.RFC3339),
+		Id:              result.EmployeeID,
+		TenantId:        req.TenantId,
+		Email:           result.Email,
+		TerminationDate: terminationDate.Format(time.RFC3339),
 	}
 
 	return &employeev1.TerminateEmployeeResponse{

@@ -28,10 +28,10 @@ func NewGetLeaveBalanceHandler(leaveBalanceRepo domain.LeaveBalanceRepository) *
 
 // LeaveBalanceDetailDTO represents a single leave type's balance.
 type LeaveBalanceDetailDTO struct {
-	LeaveTypeID  string  `json:"leave_type_id"`
-	EntitledDays float64 `json:"entitled_days"`
-	UsedDays     float64 `json:"used_days"`
-	PendingDays  float64 `json:"pending_days"`
+	LeaveTypeID   string  `json:"leave_type_id"`
+	EntitledDays  float64 `json:"entitled_days"`
+	UsedDays      float64 `json:"used_days"`
+	PendingDays   float64 `json:"pending_days"`
 	RemainingDays float64 `json:"remaining_days"`
 }
 
@@ -65,11 +65,11 @@ func (h *GetLeaveBalanceHandler) Handle(ctx context.Context, query GetLeaveBalan
 	details := make([]*LeaveBalanceDetailDTO, len(balances))
 	for i, balance := range balances {
 		details[i] = &LeaveBalanceDetailDTO{
-			LeaveTypeID:    balance.LeaveTypeID().String(),
-			EntitledDays:   balance.EntitledDays(),
-			UsedDays:       balance.UsedDays(),
-			PendingDays:    balance.PendingDays(),
-			RemainingDays:  balance.RemainingDays(),
+			LeaveTypeID:   balance.LeaveTypeID().String(),
+			EntitledDays:  balance.EntitledDays(),
+			UsedDays:      balance.UsedDays(),
+			PendingDays:   balance.PendingDays(),
+			RemainingDays: balance.RemainingDays(),
 		}
 	}
 

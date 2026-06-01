@@ -9,9 +9,9 @@ import (
 // Alias the domain repositories for convenience in the application layer.
 // These are re-exported here for consistency with the ports pattern.
 type (
-	TenantRepository    = domain.TenantRepository
-	UserRepository      = domain.UserRepository
-	RoleRepository      = domain.RoleRepository
+	TenantRepository     = domain.TenantRepository
+	UserRepository       = domain.UserRepository
+	RoleRepository       = domain.RoleRepository
 	PermissionRepository = domain.PermissionRepository
 )
 
@@ -42,10 +42,10 @@ type TokenService interface {
 
 // TokenClaims represents the parsed claims from a JWT.
 type TokenClaims struct {
-	UserID   domain.UserID
-	TenantID domain.TenantID
-	Email    string
-	Roles    []string
+	UserID    domain.UserID
+	TenantID  domain.TenantID
+	Email     string
+	Roles     []string
 	ExpiresAt int64 // Unix timestamp
 }
 

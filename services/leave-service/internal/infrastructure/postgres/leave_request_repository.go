@@ -60,13 +60,13 @@ func (r *LeaveRequestRepository) GetByID(ctx context.Context, tenantID domain.Te
 			WHERE id = $1
 		`
 		var (
-			requestID, empID, leaveTypeID string
-			startDate, endDate            time.Time
-			daysCount                     int
+			requestID, empID, leaveTypeID   string
+			startDate, endDate              time.Time
+			daysCount                       int
 			status, reason, rejectionReason string
-			approvedByID                  *string
-			approvedAt                    *time.Time
-			createdAt, updatedAt          time.Time
+			approvedByID                    *string
+			approvedAt                      *time.Time
+			createdAt, updatedAt            time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
 			&requestID, &tenantID, &empID, &leaveTypeID, &startDate, &endDate, &daysCount,
@@ -163,13 +163,13 @@ func (r *LeaveRequestRepository) ListByTenant(ctx context.Context, tenantID doma
 
 		for rows.Next() {
 			var (
-				requestID, empID, leaveTypeID string
-				startDate, endDate            time.Time
-				daysCount                     int
+				requestID, empID, leaveTypeID   string
+				startDate, endDate              time.Time
+				daysCount                       int
 				status, reason, rejectionReason string
-				approvedByID                  *string
-				approvedAt                    *time.Time
-				createdAt, updatedAt          time.Time
+				approvedByID                    *string
+				approvedAt                      *time.Time
+				createdAt, updatedAt            time.Time
 			)
 			if err := rows.Scan(
 				&requestID, &tenantID, &empID, &leaveTypeID, &startDate, &endDate, &daysCount,
@@ -261,13 +261,13 @@ func (r *LeaveRequestRepository) ListByEmployee(ctx context.Context, tenantID do
 
 		for rows.Next() {
 			var (
-				requestID, empID, leaveTypeID string
-				startDate, endDate            time.Time
-				daysCount                     int
+				requestID, empID, leaveTypeID   string
+				startDate, endDate              time.Time
+				daysCount                       int
 				status, reason, rejectionReason string
-				approvedByID                  *string
-				approvedAt                    *time.Time
-				createdAt, updatedAt          time.Time
+				approvedByID                    *string
+				approvedAt                      *time.Time
+				createdAt, updatedAt            time.Time
 			)
 			if err := rows.Scan(
 				&requestID, &tenantID, &empID, &leaveTypeID, &startDate, &endDate, &daysCount,

@@ -40,12 +40,12 @@ func NewCheckOutHandler(
 
 // CheckOutResult is the result of a successful check-out.
 type CheckOutResult struct {
-	AttendanceID      string
-	EmployeeID        string
-	TenantID          string
-	CheckOutAt        time.Time
-	WorkDurationMins  int
-	Status            string
+	AttendanceID     string
+	EmployeeID       string
+	TenantID         string
+	CheckOutAt       time.Time
+	WorkDurationMins int
+	Status           string
 }
 
 // Handle processes the check-out command.

@@ -23,7 +23,7 @@ If any of these cannot be confirmed, stop and ask.
 
 ### 1.1 Layer Boundaries
 
-```
+```bash
 Frontend (SvelteKit)
   → REST/JSON → Laravel Gateway
     → HTTP/JSON (grpc-gateway) → Go Services (gRPC)
@@ -40,16 +40,16 @@ Frontend (SvelteKit)
 
 Each service owns exactly one PostgreSQL schema. The mapping is:
 
-| Service | Schema |
-|---|---|
-| auth-service | `auth` |
-| employee-service | `employee` |
-| attendance-service | `attendance` |
-| leave-service | `leave` |
-| notification-service | `notification` |
-| audit-service | `audit` |
-| document-service | `document` |
-| ai-service | no schema (stateless) |
+| Service              | Schema                |
+| -------------------- | --------------------- |
+| auth-service         | `auth`                |
+| employee-service     | `employee`            |
+| attendance-service   | `attendance`          |
+| leave-service        | `leave`               |
+| notification-service | `notification`        |
+| audit-service        | `audit`               |
+| document-service     | `document`            |
+| ai-service           | no schema (stateless) |
 
 ### 1.3 Phase Boundaries
 
@@ -67,7 +67,8 @@ Phase 2 routes must return `501 Not Implemented`. No payroll domain logic exists
 
 - Go version: **1.24+** with modules. Run `go mod tidy` after any dependency change.
 - Project layout per service:
-  ```
+
+  ```bash
   cmd/server/main.go          ← entrypoint only, no logic
   internal/domain/            ← aggregates, value objects, domain events
   internal/application/
@@ -81,6 +82,7 @@ Phase 2 routes must return `501 Not Implemented`. No payroll domain logic exists
     http/                     ← grpc-gateway HTTP handlers (auto-generated)
   migrations/                 ← golang-migrate files (always reversible)
   ```
+
 - Use **sqlc + pgx/v5** for all database access. No raw `database/sql` strings in domain code.
 - Use **Uber zap** for structured logging. Every log entry must include `tenant_id` and `request_id`.
 - Use **OpenTelemetry Go SDK** for tracing. Every gRPC handler and repository method must be instrumented.
@@ -228,6 +230,7 @@ DB::connection('employee_db')->table('employees')->get(); // ← use gRPC only
 ## 10. Comment Policy
 
 Write no comments except when the **why** is non-obvious:
+
 - A hidden constraint or regulatory requirement
 - A workaround for a specific external system bug
 - An invariant that would surprise a future reader

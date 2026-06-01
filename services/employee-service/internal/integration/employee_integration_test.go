@@ -43,7 +43,9 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	// Connect to Postgres
 	dbURL := os.Getenv("DATABASE_URL")
@@ -58,7 +60,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logger.Fatal("connect to database", zap.Error(err))
 	}
-	defer pool.Close()
+	defer func() {
+		_ = pool.Close()
+	}()
 
 	// Connect to NATS
 	natsURL := os.Getenv("NATS_URL")
@@ -69,7 +73,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logger.Fatal("connect to NATS", zap.Error(err))
 	}
-	defer natsConn.Close()
+	defer func() {
+		_ = natsConn.Close()
+	}()
 
 	// Create test tenant IDs
 	tenantID = domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440001")

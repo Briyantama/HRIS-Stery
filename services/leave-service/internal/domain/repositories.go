@@ -71,14 +71,14 @@ type EventPublisher interface {
 
 // LeaveType represents a configured leave type (annual, sick, etc.).
 type LeaveType struct {
-	id                 LeaveTypeID
-	tenantID           TenantID
-	code               string
-	name               string
-	maxDaysPerYear     float64
-	requiresDocument   bool
-	isPaid             bool
-	isActive           bool
+	id               LeaveTypeID
+	tenantID         TenantID
+	code             string
+	name             string
+	maxDaysPerYear   float64
+	requiresDocument bool
+	isPaid           bool
+	isActive         bool
 }
 
 // NewLeaveType creates a new leave type.

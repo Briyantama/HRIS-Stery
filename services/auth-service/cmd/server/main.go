@@ -26,7 +26,7 @@ func main() {
 	ctx := context.Background()
 
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	dbURL := envOr("DATABASE_URL", "postgres://hris_app:hris_app_secret@localhost:6432/hris_db?sslmode=disable")
 	redisURL := envOr("REDIS_URL", "redis://:hris_redis_secret@localhost:6379/0")

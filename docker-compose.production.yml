@@ -1,0 +1,215 @@
+version: '3.9'
+
+services:
+  # ============================================================================
+  # Infrastructure Services
+  # ============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hris-postgres
+    environment:
+      POSTGRES_USER: hris
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: hris
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=pg_stat_statements"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hris"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: hris-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: hris-nats
+    command: -js --bind=0.0.0.0
+    volumes:
+      - nats_data:/data
+    ports:
+      - "4222:4222"
+      - "8222:8222"  # Admin panel
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # HRIS Services
+  # ============================================================================
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE: auth-service
+    container_name: hris-auth-service
+    environment:
+      GRPC_PORT: 50051
+      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/auth
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+      AUTH_PRIVATE_KEY: ${AUTH_PRIVATE_KEY:-}
+      AUTH_PUBLIC_KEY: ${AUTH_PUBLIC_KEY:-}
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  employee-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE: employee-service
+    container_name: hris-employee-service
+    environment:
+      GRPC_PORT: 50052
+      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/employee
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  attendance-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE: attendance-service
+    container_name: hris-attendance-service
+    environment:
+      GRPC_PORT: 50053
+      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/attendance
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+      WORK_HOURS_PER_DAY: 8
+      LATE_THRESHOLD_MINUTES: 15
+    ports:
+      - "50053:50053"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  leave-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE: leave-service
+    container_name: hris-leave-service
+    environment:
+      GRPC_PORT: 50054
+      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/leave
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+      DEFAULT_ANNUAL_LEAVE_DAYS: 20
+      DEFAULT_SICK_LEAVE_DAYS: 10
+    ports:
+      - "50054:50054"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+      args:
+        SERVICE: notification-service
+    container_name: hris-notification-service
+    environment:
+      GRPC_PORT: 50055
+      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/notification
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@hris.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-HRIS System}
+      SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED:-true}
+      EMAIL_TEMPLATES_DIR: ./templates
+    ports:
+      - "50055:50055"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - hris-network
+    restart: unless-stopped
+
+networks:
+  hris-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  nats_data:
+    driver: local

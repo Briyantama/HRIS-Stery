@@ -8,11 +8,11 @@ import (
 type AttendanceStatus string
 
 const (
-	StatusPresent  AttendanceStatus = "PRESENT"
-	StatusLate     AttendanceStatus = "LATE"
-	StatusAbsent   AttendanceStatus = "ABSENT"
-	StatusHalfDay  AttendanceStatus = "HALF_DAY"
-	StatusOnLeave  AttendanceStatus = "ON_LEAVE"
+	StatusPresent AttendanceStatus = "PRESENT"
+	StatusLate    AttendanceStatus = "LATE"
+	StatusAbsent  AttendanceStatus = "ABSENT"
+	StatusHalfDay AttendanceStatus = "HALF_DAY"
+	StatusOnLeave AttendanceStatus = "ON_LEAVE"
 )
 
 // IsValid returns true if the status is a valid AttendanceStatus.
@@ -31,18 +31,18 @@ type AttendanceRecord struct {
 	id                AttendanceID
 	tenantID          TenantID
 	employeeID        EmployeeID
-	date              time.Time     // ISO 8601 date
-	checkInAt         *time.Time    // When employee checked in
-	checkOutAt        *time.Time    // When employee checked out
-	checkInLatitude   *float64      // Optional geolocation
+	date              time.Time  // ISO 8601 date
+	checkInAt         *time.Time // When employee checked in
+	checkOutAt        *time.Time // When employee checked out
+	checkInLatitude   *float64   // Optional geolocation
 	checkInLongitude  *float64
 	checkOutLatitude  *float64
 	checkOutLongitude *float64
 	status            AttendanceStatus
-	workDurationMins  *int          // Computed after check-out
+	workDurationMins  *int // Computed after check-out
 	notes             string
-	createdBy         string        // "system" for auto check-in/out, user ID for admin override
-	isOverride        bool          // True if admin manually overrode the record
+	createdBy         string // "system" for auto check-in/out, user ID for admin override
+	isOverride        bool   // True if admin manually overrode the record
 	createdAt         time.Time
 	updatedAt         time.Time
 }
@@ -66,14 +66,14 @@ func NewAttendanceRecord(
 
 	now := time.Now().UTC()
 	return &AttendanceRecord{
-		id:        GenerateAttendanceID(),
-		tenantID:  tenantID,
+		id:         GenerateAttendanceID(),
+		tenantID:   tenantID,
 		employeeID: employeeID,
-		date:      date,
-		status:    StatusAbsent, // Default until check-in
-		createdBy: createdBy,
-		createdAt: now,
-		updatedAt: now,
+		date:       date,
+		status:     StatusAbsent, // Default until check-in
+		createdBy:  createdBy,
+		createdAt:  now,
+		updatedAt:  now,
 	}, nil
 }
 

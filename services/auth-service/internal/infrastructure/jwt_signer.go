@@ -17,8 +17,8 @@ type JWTSigner struct {
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
 	issuer     string
-	accessTTL  time.Duration  // e.g., 15 minutes
-	refreshTTL time.Duration  // e.g., 7 days
+	accessTTL  time.Duration // e.g., 15 minutes
+	refreshTTL time.Duration // e.g., 7 days
 }
 
 // CustomClaims extends jwt.RegisteredClaims with app-specific fields.

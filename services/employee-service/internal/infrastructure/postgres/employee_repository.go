@@ -67,13 +67,13 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID domain.Tenant
 			WHERE id = $1
 		`
 		var (
-			empID, deptID, posID     string
-			email, phone, fullName   string
-			gender, status, contract string
-			managerID                *string
-			terminationDate          *time.Time
-			birthDate                *time.Time
-			nationalID, taxID        string
+			empID, deptID, posID           string
+			email, phone, fullName         string
+			gender, status, contract       string
+			managerID                      *string
+			terminationDate                *time.Time
+			birthDate                      *time.Time
+			nationalID, taxID              string
 			joinDate, createdAt, updatedAt time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
@@ -133,13 +133,13 @@ func (r *EmployeeRepository) GetByTenantAndEmail(ctx context.Context, tenantID d
 			WHERE tenant_id = $1 AND email = $2
 		`
 		var (
-			empID, deptID, posID     string
-			emailVal, phone, fullName   string
-			gender, status, contract string
-			managerID                *string
-			terminationDate          *time.Time
-			birthDate                *time.Time
-			nationalID, taxID        string
+			empID, deptID, posID           string
+			emailVal, phone, fullName      string
+			gender, status, contract       string
+			managerID                      *string
+			terminationDate                *time.Time
+			birthDate                      *time.Time
+			nationalID, taxID              string
 			joinDate, createdAt, updatedAt time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, tenantID.String(), email).Scan(
@@ -283,13 +283,13 @@ func (r *EmployeeRepository) ListByTenant(ctx context.Context, tenantID domain.T
 
 		for rows.Next() {
 			var (
-				empID, deptID, posID     string
-				email, phone, fullName   string
-				gender, status, contract string
-				managerID                *string
-				terminationDate          *time.Time
-				birthDate                *time.Time
-				nationalID, taxID        string
+				empID, deptID, posID           string
+				email, phone, fullName         string
+				gender, status, contract       string
+				managerID                      *string
+				terminationDate                *time.Time
+				birthDate                      *time.Time
+				nationalID, taxID              string
 				joinDate, createdAt, updatedAt time.Time
 			)
 			if err := rows.Scan(
@@ -352,13 +352,13 @@ func (r *EmployeeRepository) GetByManager(ctx context.Context, tenantID domain.T
 
 		for rows.Next() {
 			var (
-				empID, deptID, posID     string
-				email, phone, fullName   string
-				gender, status, contract string
-				managerIDVal             *string
-				terminationDate          *time.Time
-				birthDate                *time.Time
-				nationalID, taxID        string
+				empID, deptID, posID           string
+				email, phone, fullName         string
+				gender, status, contract       string
+				managerIDVal                   *string
+				terminationDate                *time.Time
+				birthDate                      *time.Time
+				nationalID, taxID              string
 				joinDate, createdAt, updatedAt time.Time
 			)
 			if err := rows.Scan(

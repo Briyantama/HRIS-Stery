@@ -71,15 +71,15 @@ func (r *AttendanceRepository) GetByID(ctx context.Context, tenantID domain.Tena
 			WHERE id = $1
 		`
 		var (
-			attendanceID, empID string
-			date               time.Time
-			checkInAt, checkOutAt *time.Time
+			attendanceID, empID                              string
+			date                                             time.Time
+			checkInAt, checkOutAt                            *time.Time
 			checkInLat, checkInLon, checkOutLat, checkOutLon *float64
-			status             string
-			workDurationMins   *int
-			notes, createdBy   string
-			isOverride         bool
-			createdAt, updatedAt time.Time
+			status                                           string
+			workDurationMins                                 *int
+			notes, createdBy                                 string
+			isOverride                                       bool
+			createdAt, updatedAt                             time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
 			&attendanceID, &tenantID, &empID, &date, &checkInAt, &checkOutAt,
@@ -132,15 +132,15 @@ func (r *AttendanceRepository) GetByEmployeeAndDate(ctx context.Context, tenantI
 			WHERE employee_id = $1 AND date = $2
 		`
 		var (
-			attendanceID, empID string
-			queryDate          time.Time
-			checkInAt, checkOutAt *time.Time
+			attendanceID, empID                              string
+			queryDate                                        time.Time
+			checkInAt, checkOutAt                            *time.Time
 			checkInLat, checkInLon, checkOutLat, checkOutLon *float64
-			status             string
-			workDurationMins   *int
-			notes, createdBy   string
-			isOverride         bool
-			createdAt, updatedAt time.Time
+			status                                           string
+			workDurationMins                                 *int
+			notes, createdBy                                 string
+			isOverride                                       bool
+			createdAt, updatedAt                             time.Time
 		)
 		rowErr := tx.QueryRow(ctx, query, employeeID.String(), date).Scan(
 			&attendanceID, &tenantID, &empID, &queryDate, &checkInAt, &checkOutAt,
@@ -233,15 +233,15 @@ func (r *AttendanceRepository) ListByTenant(ctx context.Context, tenantID domain
 
 		for rows.Next() {
 			var (
-				attendanceID, empID string
-				date               time.Time
-				checkInAt, checkOutAt *time.Time
+				attendanceID, empID                              string
+				date                                             time.Time
+				checkInAt, checkOutAt                            *time.Time
 				checkInLat, checkInLon, checkOutLat, checkOutLon *float64
-				status             string
-				workDurationMins   *int
-				notes, createdBy   string
-				isOverride         bool
-				createdAt, updatedAt time.Time
+				status                                           string
+				workDurationMins                                 *int
+				notes, createdBy                                 string
+				isOverride                                       bool
+				createdAt, updatedAt                             time.Time
 			)
 			if err := rows.Scan(
 				&attendanceID, &tenantID, &empID, &date, &checkInAt, &checkOutAt,
@@ -342,15 +342,15 @@ func (r *AttendanceRepository) ListByEmployee(ctx context.Context, tenantID doma
 
 		for rows.Next() {
 			var (
-				attendanceID, empID string
-				date               time.Time
-				checkInAt, checkOutAt *time.Time
+				attendanceID, empID                              string
+				date                                             time.Time
+				checkInAt, checkOutAt                            *time.Time
 				checkInLat, checkInLon, checkOutLat, checkOutLon *float64
-				status             string
-				workDurationMins   *int
-				notes, createdBy   string
-				isOverride         bool
-				createdAt, updatedAt time.Time
+				status                                           string
+				workDurationMins                                 *int
+				notes, createdBy                                 string
+				isOverride                                       bool
+				createdAt, updatedAt                             time.Time
 			)
 			if err := rows.Scan(
 				&attendanceID, &tenantID, &empID, &date, &checkInAt, &checkOutAt,
@@ -410,15 +410,15 @@ func (r *AttendanceRepository) ListActiveCheckIns(ctx context.Context, tenantID 
 
 		for rows.Next() {
 			var (
-				attendanceID, empID string
-				date               time.Time
-				checkInAt, checkOutAt *time.Time
+				attendanceID, empID                              string
+				date                                             time.Time
+				checkInAt, checkOutAt                            *time.Time
 				checkInLat, checkInLon, checkOutLat, checkOutLon *float64
-				status             string
-				workDurationMins   *int
-				notes, createdBy   string
-				isOverride         bool
-				createdAt, updatedAt time.Time
+				status                                           string
+				workDurationMins                                 *int
+				notes, createdBy                                 string
+				isOverride                                       bool
+				createdAt, updatedAt                             time.Time
 			)
 			if err := rows.Scan(
 				&attendanceID, &tenantID, &empID, &date, &checkInAt, &checkOutAt,

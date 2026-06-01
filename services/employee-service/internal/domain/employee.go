@@ -30,10 +30,10 @@ func (s EmploymentStatus) IsValid() bool {
 type ContractType string
 
 const (
-	ContractPermanent  ContractType = "PERMANENT"
-	ContractFixedTerm  ContractType = "FIXED_TERM"
-	ContractFreelance  ContractType = "FREELANCE"
-	ContractIntern     ContractType = "INTERN"
+	ContractPermanent ContractType = "PERMANENT"
+	ContractFixedTerm ContractType = "FIXED_TERM"
+	ContractFreelance ContractType = "FREELANCE"
+	ContractIntern    ContractType = "INTERN"
 )
 
 // IsValid returns true if the contract type is a valid ContractType.
