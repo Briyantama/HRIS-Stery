@@ -1,0 +1,244 @@
+syntax = "proto3";
+
+package hris.document.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/document/v1;documentv1";
+
+service DocumentService {
+  // Initiate a file upload and get presigned URL for direct upload
+  rpc UploadDocument(UploadDocumentRequest) returns (UploadDocumentResponse) {
+    option (google.api.http) = {
+      post: "/v1/documents/upload"
+      body: "*"
+    };
+  }
+
+  // Download a document by file ID (returns presigned URL)
+  rpc DownloadDocument(DownloadDocumentRequest) returns (DownloadDocumentResponse) {
+    option (google.api.http) = {
+      get: "/v1/documents/{file_id}/download"
+    };
+  }
+
+  // List documents by entity (employee, leave, etc.)
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse) {
+    option (google.api.http) = {
+      get: "/v1/documents"
+    };
+  }
+
+  // Get complete metadata and version history for a document
+  rpc GetDocumentMetadata(GetDocumentMetadataRequest) returns (GetDocumentMetadataResponse) {
+    option (google.api.http) = {
+      get: "/v1/documents/{file_id}/metadata"
+    };
+  }
+
+  // Delete a document (soft delete)
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse) {
+    option (google.api.http) = {
+      delete: "/v1/documents/{file_id}"
+    };
+  }
+
+  // Get a time-limited presigned download URL
+  rpc GetPresignedUrl(GetPresignedUrlRequest) returns (GetPresignedUrlResponse) {
+    option (google.api.http) = {
+      post: "/v1/documents/{file_id}/presigned-url"
+      body: "*"
+    };
+  }
+
+  // Restore/rollback a file to a previous version
+  rpc RollbackDocumentVersion(RollbackDocumentVersionRequest) returns (RollbackDocumentVersionResponse) {
+    option (google.api.http) = {
+      post: "/v1/documents/{file_id}/rollback"
+      body: "*"
+    };
+  }
+}
+
+// File status enum - tracks upload, scanning, and deletion states
+enum FileStatus {
+  FILE_STATUS_UNSPECIFIED = 0;
+  FILE_STATUS_UPLOADED    = 1;  // Initial state after upload, awaiting scan
+  FILE_STATUS_SCANNED     = 2;  // Scan complete, file is clean
+  FILE_STATUS_SCAN_FAILED = 3;  // Scan detected virus or failed
+  FILE_STATUS_DELETED     = 4;  // Soft deleted
+}
+
+// File classification for access control and compliance
+enum FileClassification {
+  FILE_CLASSIFICATION_UNSPECIFIED = 0;
+  FILE_CLASSIFICATION_PUBLIC      = 1;  // No access restrictions
+  FILE_CLASSIFICATION_CONFIDENTIAL = 2; // Restricted access, audit logged
+  FILE_CLASSIFICATION_SECRET      = 3;  // Highly restricted, compliance sensitive
+}
+
+// Entity type - what document belongs to
+enum EntityType {
+  ENTITY_TYPE_UNSPECIFIED = 0;
+  ENTITY_TYPE_EMPLOYEE    = 1;  // Employee profile documents
+  ENTITY_TYPE_LEAVE       = 2;  // Leave request attachments
+  ENTITY_TYPE_GENERAL     = 3;  // General HR documents
+}
+
+// Core DocumentFile aggregate - file metadata
+message DocumentFile {
+  string file_id              = 1;  // UUID
+  string tenant_id            = 2;  // UUID - tenant owner
+  string uploaded_by          = 3;  // UUID - user who uploaded
+  EntityType entity_type      = 4;  // Type of entity owning this document
+  string entity_id            = 5;  // UUID - associated entity (employee, leave, etc.)
+
+  string file_name            = 6;  // Original file name
+  string mime_type            = 7;  // e.g. "application/pdf"
+  int64  size_bytes           = 8;  // File size in bytes
+
+  string minio_bucket         = 9;  // MinIO bucket name
+  string minio_key            = 10; // Full object key path in MinIO
+
+  FileStatus status           = 11; // Current file status
+  FileClassification classification = 12; // File classification level
+  int32  retention_days       = 13; // Days before auto-delete (0 = no expiry)
+
+  int32  current_version      = 14; // Latest version number
+  int32  total_versions       = 15; // Total number of versions
+
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// DocumentFileVersion - version history tracking
+message DocumentFileVersion {
+  string version_id           = 1;  // UUID
+  string file_id              = 2;  // UUID - reference to parent file
+  int32  version_number       = 3;  // Sequential version (1, 2, 3, ...)
+  string minio_key            = 4;  // Object key for this specific version
+  int64  size_bytes           = 5;  // File size for this version
+  string created_by           = 6;  // UUID - who created this version
+
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// UploadDocument RPC - initiate file upload
+// ──────────────────────────────────────────────────────────────────────
+
+message UploadDocumentRequest {
+  string tenant_id            = 1;  // Injected from JWT
+  EntityType entity_type      = 2;  // Document owner type
+  string entity_id            = 3;  // UUID of owner entity
+  string file_name            = 4;  // Original file name
+  string mime_type            = 5;  // MIME type hint
+  int64  size_bytes           = 6;  // Total size for quota checking
+  FileClassification classification = 7; // File classification
+  int32  retention_days       = 8;  // Optional retention policy
+}
+
+message UploadDocumentResponse {
+  string file_id              = 1;  // Assigned file UUID
+  string upload_session_id    = 2;  // Session ID for multi-part tracking
+  string presigned_url        = 3;  // MinIO presigned URL for upload
+  google.protobuf.Timestamp expires_at = 4; // URL expiration time
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// DownloadDocument RPC - retrieve file with optional versioning
+// ──────────────────────────────────────────────────────────────────────
+
+message DownloadDocumentRequest {
+  string tenant_id            = 1;
+  string file_id              = 2;
+  int32  version_number       = 3;  // Optional - specific version to download
+}
+
+message DownloadDocumentResponse {
+  string presigned_url        = 1;  // Time-limited download URL
+  google.protobuf.Timestamp expires_at = 2; // URL expiration
+  DocumentFile file_metadata  = 3;  // File info for verification
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ListDocuments RPC - query by entity with pagination
+// ──────────────────────────────────────────────────────────────────────
+
+message ListDocumentsRequest {
+  string tenant_id            = 1;
+  EntityType entity_type      = 2;  // Optional filter
+  string entity_id            = 3;  // Optional filter (requires entity_type)
+  string search               = 4;  // Optional search by file_name
+  int32  page_size            = 5;  // Default 20, max 100
+  string page_token           = 6;  // Cursor for pagination
+}
+
+message ListDocumentsResponse {
+  repeated DocumentFile documents = 1;
+  string next_page_token      = 2;  // Empty if last page
+  int32  total_count          = 3;  // Total matching documents
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// GetDocumentMetadata RPC - full metadata including versions
+// ──────────────────────────────────────────────────────────────────────
+
+message GetDocumentMetadataRequest {
+  string tenant_id            = 1;
+  string file_id              = 2;
+  bool   include_versions     = 3;  // Default true
+}
+
+message GetDocumentMetadataResponse {
+  DocumentFile file           = 1;
+  repeated DocumentFileVersion versions = 2; // Version history
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// DeleteDocument RPC - soft delete
+// ──────────────────────────────────────────────────────────────────────
+
+message DeleteDocumentRequest {
+  string tenant_id            = 1;
+  string file_id              = 2;
+  string reason               = 3;  // Optional deletion reason for audit
+}
+
+message DeleteDocumentResponse {
+  bool success                = 1;
+  google.protobuf.Timestamp deleted_at = 2;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// GetPresignedUrl RPC - get temporary download link
+// ──────────────────────────────────────────────────────────────────────
+
+message GetPresignedUrlRequest {
+  string tenant_id            = 1;
+  string file_id              = 2;
+  int32  expiration_seconds   = 3;  // Optional, default 3600 (1 hour)
+  string download_name        = 4;  // Optional, for Content-Disposition
+}
+
+message GetPresignedUrlResponse {
+  string url                  = 1;  // Presigned download URL
+  google.protobuf.Timestamp expires_at = 2; // Expiration timestamp
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// RollbackDocumentVersion RPC - restore to previous version
+// ──────────────────────────────────────────────────────────────────────
+
+message RollbackDocumentVersionRequest {
+  string tenant_id            = 1;
+  string file_id              = 2;
+  int32  version_number       = 3;  // Version to restore
+  string reason               = 4;  // Required for audit trail
+}
+
+message RollbackDocumentVersionResponse {
+  DocumentFile file           = 1;  // Updated file metadata
+  int32 new_version_number    = 2;  // The new version number created
+}

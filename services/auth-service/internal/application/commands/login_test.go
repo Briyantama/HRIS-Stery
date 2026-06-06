@@ -153,15 +153,21 @@ func TestLoginSuccess(t *testing.T) {
 
 	userID := domain.GenerateUserID()
 	password := "ValidPass123!"
-	user, _ := domain.NewUser(userID, tenantID, "john@example.com", password, "John Doe")
+	user, err := domain.NewUser(userID, tenantID, "john@example.com", password, "John Doe")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
 	user.VerifyEmail()
 
-	// Initialize mocks
 	tenantRepo := NewMockTenantRepository()
-	tenantRepo.Create(ctx, tenant)
+	if err := tenantRepo.Create(ctx, tenant); err != nil {
+		t.Fatalf("setup tenant: %v", err)
+	}
 
 	userRepo := NewMockUserRepository()
-	userRepo.Create(ctx, user)
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("setup user: %v", err)
+	}
 
 	tokenSvc := &MockTokenService{}
 	eventPub := &MockEventPublisher{}
@@ -229,13 +235,20 @@ func TestLoginFailInvalidPassword(t *testing.T) {
 	tenant := domain.NewTenant(tenantID, tenantSlug, "ACME Corp")
 
 	userID := domain.GenerateUserID()
-	user, _ := domain.NewUser(userID, tenantID, "john@example.com", "ValidPass123!", "John Doe")
+	user, err := domain.NewUser(userID, tenantID, "john@example.com", "ValidPass123!", "John Doe")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
 
 	tenantRepo := NewMockTenantRepository()
-	tenantRepo.Create(ctx, tenant)
+	if err := tenantRepo.Create(ctx, tenant); err != nil {
+		t.Fatalf("setup tenant: %v", err)
+	}
 
 	userRepo := NewMockUserRepository()
-	userRepo.Create(ctx, user)
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("setup user: %v", err)
+	}
 
 	tokenSvc := &MockTokenService{}
 	eventPub := &MockEventPublisher{}

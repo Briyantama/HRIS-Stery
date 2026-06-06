@@ -65,6 +65,7 @@ help:
 	@echo "  make lint-go          golangci-lint (skip if not installed)"
 	@echo "  make format-go        go fmt for all Go services"
 	@echo "  make update-go-mods   update go.mod for all Go services"
+	@echo "  make all-go           run all go vet, fmt, and lint commands for all Go services"
 	@echo ""
 	@echo "Apps (skipped if directory missing):"
 	@echo "  make test-laravel     Pest (apps/api-gateway)"
@@ -237,6 +238,11 @@ lint-go:
 		echo "SKIP lint-go: golangci-lint not installed (https://golangci-lint.run/welcome/install/)"; \
 		exit 0; \
 	fi
+	$(call go_foreach,golangci-lint run --timeout=5m ./...)
+
+all-go:
+	$(call go_foreach,go vet ./...)
+	$(call go_foreach,go fmt ./...)
 	$(call go_foreach,golangci-lint run --timeout=5m ./...)
 
 # ──────────────────────────────────────────────────────────────

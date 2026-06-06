@@ -3,30 +3,37 @@ package nats
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
+	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/consumers"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
 )
 
 type LeaveConsumer struct {
 	js          nats.JetStreamContext
 	pool        *pgxpool.Pool
 	appConsumer *consumers.LeaveEventConsumer
+	logger      *zap.Logger
 }
 
 func NewLeaveConsumer(
 	js nats.JetStreamContext,
 	pool *pgxpool.Pool,
 	appConsumer *consumers.LeaveEventConsumer,
+	logger *zap.Logger,
 ) *LeaveConsumer {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &LeaveConsumer{
 		js:          js,
 		pool:        pool,
 		appConsumer: appConsumer,
+		logger:      logger,
 	}
 }
 
@@ -50,17 +57,16 @@ func (c *LeaveConsumer) Subscribe(ctx context.Context) error {
 func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 	var envelope leaveEventEnvelope
 	if err := json.Unmarshal(msg.Data, &envelope); err != nil {
-		fmt.Printf("error unmarshaling leave event: %v\n", err)
+		c.logger.Error("unmarshaling leave event", zap.Error(err))
+		sharednats.AckMessage(c.logger, msg)
 		return
 	}
 
-	// Check idempotency
 	if c.isProcessed(ctx, envelope.EventID) {
-		msg.Ack()
+		sharednats.AckMessage(c.logger, msg)
 		return
 	}
 
-	// Route to appropriate handler based on event type
 	var err error
 	switch envelope.EventType {
 	case "hris.operations.leave.requested":
@@ -71,7 +77,9 @@ func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 			EndDate    string `json:"end_date"`
 			ApproverId string `json:"approver_id"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err == nil {
+		if jsonErr := json.Unmarshal(envelope.Payload, &payload); jsonErr != nil {
+			err = jsonErr
+		} else {
 			event := &domain.LeaveRequestedEvent{
 				EventID:    envelope.EventID,
 				TenantID:   domain.MustNewTenantID(envelope.TenantID),
@@ -94,7 +102,9 @@ func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 			EndDate    string `json:"end_date"`
 			ApproverId string `json:"approver_id"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err == nil {
+		if jsonErr := json.Unmarshal(envelope.Payload, &payload); jsonErr != nil {
+			err = jsonErr
+		} else {
 			event := &domain.LeaveApprovedEvent{
 				EventID:    envelope.EventID,
 				TenantID:   domain.MustNewTenantID(envelope.TenantID),
@@ -117,7 +127,9 @@ func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 			EndDate    string `json:"end_date"`
 			Reason     string `json:"reason"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err == nil {
+		if jsonErr := json.Unmarshal(envelope.Payload, &payload); jsonErr != nil {
+			err = jsonErr
+		} else {
 			event := &domain.LeaveRejectedEvent{
 				EventID:    envelope.EventID,
 				TenantID:   domain.MustNewTenantID(envelope.TenantID),
@@ -134,14 +146,13 @@ func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 	}
 
 	if err != nil {
-		fmt.Printf("error processing leave event %s: %v\n", envelope.EventID, err)
-		// Don't ack - let NATS retry
+		c.logger.Error("processing leave event", zap.Error(err), zap.String("event_id", envelope.EventID))
+		sharednats.NakMessage(c.logger, msg)
 		return
 	}
 
-	// Mark as processed
 	c.markProcessed(ctx, envelope.EventID)
-	msg.Ack()
+	sharednats.AckMessage(c.logger, msg)
 }
 
 func (c *LeaveConsumer) isProcessed(ctx context.Context, eventID string) bool {

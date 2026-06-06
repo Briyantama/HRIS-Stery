@@ -4,10 +4,11 @@ use (
 	./gen/go
 	./services/_shared
 	./services/attendance-service
+	./services/audit-service
 	./services/auth-service
+	./services/document-service
 	./services/employee-service
 	./services/leave-service
 	./services/notification-service
-// ./services/audit-service
 // ./services/ai-service
 )

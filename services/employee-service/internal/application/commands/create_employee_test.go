@@ -144,22 +144,19 @@ func (m *mockEventPublisher) PublishSync(ctx context.Context, event domain.Domai
 func TestCreateEmployeeSuccess(t *testing.T) {
 	ctx := context.Background()
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
-	deptID := domain.GenerateDepartmentID()
-	posID := domain.GeneratePositionID()
 
 	empRepo := newMockEmployeeRepository()
 	deptRepo := newMockDepartmentRepository()
 	posRepo := newMockPositionRepository()
 	eventPub := newMockEventPublisher()
 
-	// Create test department and position
 	dept, _ := domain.NewDepartment(tenantID, "Engineering")
 	_ = deptRepo.Create(ctx, dept)
-	deptID = dept.ID()
+	deptID := dept.ID()
 
 	pos, _ := domain.NewPosition(tenantID, "Software Engineer", domain.LevelSenior)
 	_ = posRepo.Create(ctx, pos)
-	posID = pos.ID()
+	posID := pos.ID()
 
 	handler := NewCreateEmployeeHandler(empRepo, deptRepo, posRepo, eventPub)
 	cmd := CreateEmployeeCommand{
@@ -190,22 +187,19 @@ func TestCreateEmployeeSuccess(t *testing.T) {
 func TestCreateEmployeeDuplicateEmail(t *testing.T) {
 	ctx := context.Background()
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
-	deptID := domain.GenerateDepartmentID()
-	posID := domain.GeneratePositionID()
 
 	empRepo := newMockEmployeeRepository()
 	deptRepo := newMockDepartmentRepository()
 	posRepo := newMockPositionRepository()
 	eventPub := newMockEventPublisher()
 
-	// Pre-populate with existing employee
 	dept, _ := domain.NewDepartment(tenantID, "Engineering")
 	_ = deptRepo.Create(ctx, dept)
-	deptID = dept.ID()
+	deptID := dept.ID()
 
 	pos, _ := domain.NewPosition(tenantID, "Software Engineer", domain.LevelSenior)
 	_ = posRepo.Create(ctx, pos)
-	posID = pos.ID()
+	posID := pos.ID()
 
 	existing, _ := domain.NewEmployee(tenantID, "john@example.com", "John Doe", deptID, posID)
 	_ = empRepo.Create(ctx, existing)

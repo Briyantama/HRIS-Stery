@@ -86,7 +86,9 @@ func TestQueryAuditTrailHandler_AllEntries(t *testing.T) {
 			"",
 			nil,
 		)
-		mockRepo.Record(context.Background(), entry)
+		if err := mockRepo.Record(context.Background(), entry); err != nil {
+			t.Fatalf("record entry: %v", err)
+		}
 	}
 
 	filters := AuditQueryFilters{
@@ -119,8 +121,12 @@ func TestQueryAuditTrailHandler_FilterByActor(t *testing.T) {
 	// Add entries with different actors
 	entry1, _ := domain.NewAuditEntry(tenantID, "actor-1", domain.ActionLogin, domain.ResourceUser, "", "Entry 1", true, "", nil)
 	entry2, _ := domain.NewAuditEntry(tenantID, "actor-2", domain.ActionLogin, domain.ResourceUser, "", "Entry 2", true, "", nil)
-	mockRepo.Record(context.Background(), entry1)
-	mockRepo.Record(context.Background(), entry2)
+	if err := mockRepo.Record(context.Background(), entry1); err != nil {
+		t.Fatalf("record entry1: %v", err)
+	}
+	if err := mockRepo.Record(context.Background(), entry2); err != nil {
+		t.Fatalf("record entry2: %v", err)
+	}
 
 	filters := AuditQueryFilters{
 		TenantID: tenantID.String(),
@@ -152,8 +158,12 @@ func TestQueryAuditTrailHandler_FilterByAction(t *testing.T) {
 	// Add entries with different actions
 	entry1, _ := domain.NewAuditEntry(tenantID, "actor", domain.ActionLogin, domain.ResourceUser, "", "Entry 1", true, "", nil)
 	entry2, _ := domain.NewAuditEntry(tenantID, "actor", domain.ActionEmployeeCreate, domain.ResourceEmployee, "", "Entry 2", true, "", nil)
-	mockRepo.Record(context.Background(), entry1)
-	mockRepo.Record(context.Background(), entry2)
+	if err := mockRepo.Record(context.Background(), entry1); err != nil {
+		t.Fatalf("record entry1: %v", err)
+	}
+	if err := mockRepo.Record(context.Background(), entry2); err != nil {
+		t.Fatalf("record entry2: %v", err)
+	}
 
 	filters := AuditQueryFilters{
 		TenantID: tenantID.String(),
@@ -195,7 +205,9 @@ func TestQueryAuditTrailHandler_Pagination(t *testing.T) {
 			"",
 			nil,
 		)
-		mockRepo.Record(context.Background(), entry)
+		if err := mockRepo.Record(context.Background(), entry); err != nil {
+			t.Fatalf("record entry: %v", err)
+		}
 	}
 
 	// First page
@@ -247,7 +259,9 @@ func TestQueryAuditTrailHandler_DTOMapping(t *testing.T) {
 		"invalid credentials",
 		changes,
 	)
-	mockRepo.Record(context.Background(), entry)
+	if err := mockRepo.Record(context.Background(), entry); err != nil {
+		t.Fatalf("record entry: %v", err)
+	}
 
 	filters := AuditQueryFilters{
 		TenantID: tenantID.String(),

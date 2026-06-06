@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // HealthService implements grpc.health.v1.HealthServer

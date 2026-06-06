@@ -124,9 +124,14 @@ func (h *RegisterTenantHandler) Handle(ctx context.Context, cmd RegisterTenantCo
 		return nil, fmt.Errorf("assign admin role: %w", err)
 	}
 
-	// Publish events
-	h.eventPub.PublishAsync(ctx, domain.NewTenantCreatedEvent(tenantID, cmd.TenantSlug, cmd.CompanyName))
-	h.eventPub.PublishAsync(ctx, domain.NewUserRegisteredEvent(tenantID, userID, cmd.AdminEmail, cmd.AdminName))
+	err = h.eventPub.PublishAsync(ctx, domain.NewTenantCreatedEvent(tenantID, cmd.TenantSlug, cmd.CompanyName))
+	if err != nil {
+		return nil, fmt.Errorf("publish tenant created event: %w", err)
+	}
+	err = h.eventPub.PublishAsync(ctx, domain.NewUserRegisteredEvent(tenantID, userID, cmd.AdminEmail, cmd.AdminName))
+	if err != nil {
+		return nil, fmt.Errorf("publish user registered event: %w", err)
+	}
 
 	return &RegisterTenantResult{
 		TenantID: tenantID,

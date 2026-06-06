@@ -58,7 +58,7 @@ func TestLeaveEventConsumer_ConsumeLeaveRequested(t *testing.T) {
 		FromName:    "HRIS",
 	}
 	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeEmail}, emailConfig)
-	mockConfigRepo.Create(context.Background(), config)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
 
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 
@@ -100,7 +100,7 @@ func TestLeaveEventConsumer_ConsumeLeaveApproved(t *testing.T) {
 		FromName:    "HRIS",
 	}
 	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeInApp}, emailConfig)
-	mockConfigRepo.Create(context.Background(), config)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
 
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 
@@ -143,7 +143,7 @@ func TestLeaveEventConsumer_ConsumeLeaveRejected(t *testing.T) {
 		FromName:    "HRIS",
 	}
 	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeEmail}, emailConfig)
-	mockConfigRepo.Create(context.Background(), config)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
 
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 

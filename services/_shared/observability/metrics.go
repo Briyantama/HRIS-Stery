@@ -106,7 +106,7 @@ func (m *MetricsRegistry) RecordRPCRequest(ctx context.Context, endpoint string,
 
 	attrs := []attribute.KeyValue{
 		attribute.String("endpoint", endpoint),
-		attribute.String(ServiceKey, sc.TenantID),
+		attribute.String(TenantIDKey, sc.TenantID),
 		attribute.Bool("success", success),
 	}
 

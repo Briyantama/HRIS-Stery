@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
 	"github.com/hris-stery/hris-stery/services/leave-service/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.uber.org/zap"
 )
 
 // EmployeeCreatedConsumer processes employee creation events and initializes leave balances.
@@ -18,6 +20,7 @@ type EmployeeCreatedConsumer struct {
 	leaveBalanceRepo     domain.LeaveBalanceRepository
 	leaveTypeRepo        domain.LeaveTypeRepository
 	employeeCreatedEvent chan struct{}
+	logger               *zap.Logger
 }
 
 // EmployeeCreatedPayload represents the payload of hris.workforce.employee.created event.
@@ -35,13 +38,18 @@ func NewEmployeeCreatedConsumer(
 	pool *pgxpool.Pool,
 	leaveBalanceRepo domain.LeaveBalanceRepository,
 	leaveTypeRepo domain.LeaveTypeRepository,
+	logger *zap.Logger,
 ) *EmployeeCreatedConsumer {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &EmployeeCreatedConsumer{
 		js:                   js,
 		pool:                 pool,
 		leaveBalanceRepo:     leaveBalanceRepo,
 		leaveTypeRepo:        leaveTypeRepo,
 		employeeCreatedEvent: make(chan struct{}, 100),
+		logger:               logger,
 	}
 }
 
@@ -68,22 +76,24 @@ func (c *EmployeeCreatedConsumer) Subscribe(ctx context.Context) error {
 		for {
 			consumer, err := c.js.Consumer(ctx, "HRIS_EVENTS", consumerName)
 			if err != nil {
-				fmt.Printf("Error getting consumer: %v\n", err)
+				c.logger.Error("getting jetstream consumer", zap.Error(err), zap.String("consumer", consumerName))
 				time.Sleep(5 * time.Second)
 				continue
 			}
 
 			msg, err := consumer.Next()
 			if err != nil {
-				fmt.Printf("Error getting next message: %v\n", err)
+				c.logger.Warn("waiting for next jetstream message", zap.Error(err), zap.String("consumer", consumerName))
 				time.Sleep(1 * time.Second)
 				continue
 			}
 
 			if err := c.processMessage(ctx, msg.Data()); err != nil {
-				fmt.Printf("Error processing employee created event: %v\n", err)
+				c.logger.Error("processing employee created event", zap.Error(err))
+				sharednats.NakJetStream(c.logger, msg)
+				continue
 			}
-			msg.Ack()
+			sharednats.AckJetStream(c.logger, msg)
 		}
 	}()
 

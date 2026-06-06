@@ -3,29 +3,36 @@ package nats
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
+	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/consumers"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
 )
 
 type EmployeeConsumer struct {
 	js          nats.JetStreamContext
 	pool        *pgxpool.Pool
 	appConsumer *consumers.EmployeeEventConsumer
+	logger      *zap.Logger
 }
 
 func NewEmployeeConsumer(
 	js nats.JetStreamContext,
 	pool *pgxpool.Pool,
 	appConsumer *consumers.EmployeeEventConsumer,
+	logger *zap.Logger,
 ) *EmployeeConsumer {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &EmployeeConsumer{
 		js:          js,
 		pool:        pool,
 		appConsumer: appConsumer,
+		logger:      logger,
 	}
 }
 
@@ -39,13 +46,13 @@ func (c *EmployeeConsumer) Subscribe(ctx context.Context) error {
 func (c *EmployeeConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 	var envelope leaveEventEnvelope
 	if err := json.Unmarshal(msg.Data, &envelope); err != nil {
-		fmt.Printf("error unmarshaling employee event: %v\n", err)
+		c.logger.Error("unmarshaling employee event", zap.Error(err))
+		sharednats.AckMessage(c.logger, msg)
 		return
 	}
 
-	// Check idempotency
 	if c.isProcessed(ctx, envelope.EventID) {
-		msg.Ack()
+		sharednats.AckMessage(c.logger, msg)
 		return
 	}
 
@@ -58,7 +65,9 @@ func (c *EmployeeConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 			FirstName  string `json:"first_name"`
 			LastName   string `json:"last_name"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err == nil {
+		if jsonErr := json.Unmarshal(envelope.Payload, &payload); jsonErr != nil {
+			err = jsonErr
+		} else {
 			event := &domain.EmployeeCreatedEvent{
 				EventID:    envelope.EventID,
 				TenantID:   domain.MustNewTenantID(envelope.TenantID),
@@ -79,7 +88,9 @@ func (c *EmployeeConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 			FirstName  string `json:"first_name"`
 			LastName   string `json:"last_name"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err == nil {
+		if jsonErr := json.Unmarshal(envelope.Payload, &payload); jsonErr != nil {
+			err = jsonErr
+		} else {
 			event := &domain.EmployeeTerminatedEvent{
 				EventID:    envelope.EventID,
 				TenantID:   domain.MustNewTenantID(envelope.TenantID),
@@ -95,12 +106,13 @@ func (c *EmployeeConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 	}
 
 	if err != nil {
-		fmt.Printf("error processing employee event %s: %v\n", envelope.EventID, err)
+		c.logger.Error("processing employee event", zap.Error(err), zap.String("event_id", envelope.EventID))
+		sharednats.NakMessage(c.logger, msg)
 		return
 	}
 
 	c.markProcessed(ctx, envelope.EventID)
-	msg.Ack()
+	sharednats.AckMessage(c.logger, msg)
 }
 
 func (c *EmployeeConsumer) isProcessed(ctx context.Context, eventID string) bool {

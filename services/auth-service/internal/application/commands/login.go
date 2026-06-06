@@ -61,40 +61,30 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 	// Tenant lookup
 	tenant, err := h.tenantRepo.GetBySlug(ctx, cmd.TenantSlug)
 	if err != nil {
-		h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(
-			cmd.Email, cmd.TenantSlug, "tenant_not_found", cmd.IPAddr,
-		))
+		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "tenant_not_found", cmd.IPAddr)
 		return nil, fmt.Errorf("tenant not found")
 	}
 
 	if !tenant.IsActive() {
-		h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(
-			cmd.Email, cmd.TenantSlug, "tenant_inactive", cmd.IPAddr,
-		))
+		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "tenant_inactive", cmd.IPAddr)
 		return nil, fmt.Errorf("tenant is inactive")
 	}
 
 	// User lookup
 	user, err := h.userRepo.GetByTenantAndEmail(ctx, tenant.ID(), cmd.Email)
 	if err != nil {
-		h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(
-			cmd.Email, cmd.TenantSlug, "user_not_found", cmd.IPAddr,
-		))
+		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "user_not_found", cmd.IPAddr)
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if !user.IsActive() {
-		h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(
-			cmd.Email, cmd.TenantSlug, "user_inactive", cmd.IPAddr,
-		))
+		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "user_inactive", cmd.IPAddr)
 		return nil, fmt.Errorf("account is inactive")
 	}
 
 	// Password verification
 	if err := user.VerifyPassword(cmd.Password); err != nil {
-		h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(
-			cmd.Email, cmd.TenantSlug, "invalid_password", cmd.IPAddr,
-		))
+		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "invalid_password", cmd.IPAddr)
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
@@ -127,8 +117,7 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		return nil, fmt.Errorf("generate tokens: %w", err)
 	}
 
-	// Publish event
-	h.eventPub.PublishAsync(ctx, domain.NewUserLoggedInEvent(
+	_ = h.eventPub.PublishAsync(ctx, domain.NewUserLoggedInEvent(
 		tenant.ID(),
 		user.ID(),
 		user.Email(),
@@ -145,4 +134,8 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		AccessTokenTTL: ttl,
 		Roles:          roleNames,
 	}, nil
+}
+
+func (h *LoginHandler) publishLoginFailed(ctx context.Context, email, tenantSlug, reason, ipAddr string) {
+	_ = h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(email, tenantSlug, reason, ipAddr))
 }

@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,8 +150,9 @@ func (s *NotificationServiceServer) ListNotifications(ctx context.Context, req *
 
 	offset := 0
 	if req.PageToken != "" {
-		// For simple implementation, page_token could be offset as string
-		// In production, use proper token encoding
+		if o, err := strconv.Atoi(req.PageToken); err == nil {
+			offset = o
+		}
 	}
 
 	query := queries.ListNotificationsQuery{
@@ -233,7 +235,7 @@ func (s *NotificationServiceServer) UpdateChannelConfig(ctx context.Context, req
 		return nil, status.Errorf(codes.InvalidArgument, "tenant_id is required")
 	}
 
-	channel := domain.ChannelTypeUnknown
+	var channel domain.ChannelType
 	switch req.Channel {
 	case pb.NotificationChannel_NOTIFICATION_CHANNEL_EMAIL:
 		channel = domain.ChannelTypeEmail

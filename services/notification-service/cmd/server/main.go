@@ -16,10 +16,10 @@ import (
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/consumers"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/queries"
+	"github.com/hris-stery/hris-stery/services/notification-service/internal/health"
+	"github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/channels"
 	infracons "github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/nats"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/postgres"
-	"github.com/hris-stery/hris-stery/services/notification-service/internal/infrastructure/channels"
-	"github.com/hris-stery/hris-stery/services/notification-service/internal/health"
 	grpchandlers "github.com/hris-stery/hris-stery/services/notification-service/internal/interfaces/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -120,8 +120,8 @@ func main() {
 		logger,
 	)
 	inAppAdapter := channels.NewInAppAdapter()
-	_ = emailAdapter   // Placeholder for future use
-	_ = inAppAdapter   // Placeholder for future use
+	_ = emailAdapter // Placeholder for future use
+	_ = inAppAdapter // Placeholder for future use
 
 	// Instantiate command handlers
 	sendHandler := commands.NewSendNotificationHandler(notificationRepo)
@@ -139,9 +139,9 @@ func main() {
 	appAuthConsumer := consumers.NewAuthEventConsumer(sendHandler, channelConfigRepo)
 
 	// Instantiate NATS event consumers
-	leaveConsumer := infracons.NewLeaveConsumer(js, pool, appLeaveConsumer)
-	employeeConsumer := infracons.NewEmployeeConsumer(js, pool, appEmployeeConsumer)
-	authConsumer := infracons.NewAuthConsumer(js, pool, appAuthConsumer)
+	leaveConsumer := infracons.NewLeaveConsumer(js, pool, appLeaveConsumer, logger)
+	employeeConsumer := infracons.NewEmployeeConsumer(js, pool, appEmployeeConsumer, logger)
+	authConsumer := infracons.NewAuthConsumer(js, pool, appAuthConsumer, logger)
 
 	// Subscribe to events
 	logger.Info("subscribing to NATS events")
@@ -185,15 +185,4 @@ func main() {
 	if err := grpcServer.Serve(listener); err != nil {
 		logger.Fatal("gRPC server error", zap.Error(err))
 	}
-}
-
-func parseInt(s string, defaultVal int) int {
-	if s == "" {
-		return defaultVal
-	}
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		return defaultVal
-	}
-	return val
 }

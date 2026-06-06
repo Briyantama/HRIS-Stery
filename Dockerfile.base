@@ -2,7 +2,7 @@
 # Usage: docker build -f Dockerfile.base --build-arg SERVICE=auth-service -t hris/auth-service .
 
 ARG SERVICE=auth-service
-ARG GO_VERSION=1.24
+ARG GO_VERSION=1.25.0
 
 # Build stage
 FROM golang:${GO_VERSION}-alpine AS builder

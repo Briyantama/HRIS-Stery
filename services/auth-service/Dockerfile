@@ -1,7 +1,7 @@
 # Build from repository root:
 #   docker build -f services/auth-service/Dockerfile -t hris-auth-service .
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25.0-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 

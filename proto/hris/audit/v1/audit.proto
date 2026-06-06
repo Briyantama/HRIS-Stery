@@ -2,14 +2,30 @@ syntax = "proto3";
 
 package hris.audit.v1;
 
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/hris-stery/hris-stery/gen/go/hris/audit/v1;auditv1";
 
 service AuditService {
-  rpc Record(RecordAuditRequest) returns (RecordAuditResponse);
-  rpc Query(QueryAuditRequest) returns (QueryAuditResponse);
-  rpc GetEntry(GetAuditEntryRequest) returns (AuditEntry);
+  rpc Record(RecordAuditRequest) returns (RecordAuditResponse) {
+    option (google.api.http) = {
+      post: "/v1/audit/entries"
+      body: "*"
+    };
+  }
+
+  rpc Query(QueryAuditRequest) returns (QueryAuditResponse) {
+    option (google.api.http) = {
+      get: "/v1/audit/entries"
+    };
+  }
+
+  rpc GetEntry(GetAuditEntryRequest) returns (AuditEntry) {
+    option (google.api.http) = {
+      get: "/v1/audit/entries/{entry_id}"
+    };
+  }
 }
 
 enum AuditAction {
