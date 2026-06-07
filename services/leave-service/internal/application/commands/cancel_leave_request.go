@@ -75,6 +75,9 @@ func (h *CancelLeaveRequestHandler) Handle(ctx context.Context, cmd CancelLeaveR
 
 	// Update balance based on original status
 	year := leaveRequest.StartDate().Year()
+	daysFloat := float64(leaveRequest.DaysCount())
+
+	// Get balance first (separate read transaction is acceptable)
 	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(
 		ctx,
 		tenantID,
@@ -90,8 +93,6 @@ func (h *CancelLeaveRequestHandler) Handle(ctx context.Context, cmd CancelLeaveR
 		return nil, fmt.Errorf("balance not found")
 	}
 
-	daysFloat := float64(leaveRequest.DaysCount())
-
 	// If originally APPROVED, remove from used; if PENDING, remove from pending
 	if originalStatus == domain.StatusApproved {
 		if err := balance.SubtractUsed(daysFloat); err != nil {
@@ -103,13 +104,10 @@ func (h *CancelLeaveRequestHandler) Handle(ctx context.Context, cmd CancelLeaveR
 		}
 	}
 
-	if err := h.leaveBalanceRepo.Update(ctx, balance); err != nil {
-		return nil, fmt.Errorf("saving balance: %w", err)
-	}
-
-	// Persist the updated leave request
-	if err := h.leaveRequestRepo.Update(ctx, leaveRequest); err != nil {
-		return nil, fmt.Errorf("saving leave request: %w", err)
+	// Cancel request and update balance atomically in a single transaction.
+	// If either operation fails, both roll back.
+	if err := h.leaveRequestRepo.CancelAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+		return nil, fmt.Errorf("cancelling leave request: %w", err)
 	}
 
 	// Publish domain event

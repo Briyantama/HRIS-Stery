@@ -65,6 +65,22 @@ func (m *mockLeaveRequestRepo) ApproveAndUpdateBalanceAtomically(ctx context.Con
 	return balanceRepo.Update(ctx, balance)
 }
 
+func (m *mockLeaveRequestRepo) RejectAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
+	// Mock implementation: just call Update and then let the balance repo update
+	if err := m.Update(ctx, request); err != nil {
+		return err
+	}
+	return balanceRepo.Update(ctx, balance)
+}
+
+func (m *mockLeaveRequestRepo) CancelAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
+	// Mock implementation: just call Update and then let the balance repo update
+	if err := m.Update(ctx, request); err != nil {
+		return err
+	}
+	return balanceRepo.Update(ctx, balance)
+}
+
 type mockLeaveBalanceRepo struct {
 	balances map[string]*domain.LeaveBalance
 	updated  []*domain.LeaveBalance

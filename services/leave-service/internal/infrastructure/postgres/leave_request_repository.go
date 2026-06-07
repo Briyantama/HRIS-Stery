@@ -404,6 +404,52 @@ func (r *LeaveRequestRepository) ApproveAndUpdateBalanceAtomically(
 	})
 }
 
+// RejectAndUpdateBalanceAtomically rejects a leave request and updates balance in a single transaction.
+// This ensures all-or-nothing semantics: if balance update fails, request rejection rolls back.
+func (r *LeaveRequestRepository) RejectAndUpdateBalanceAtomically(
+	ctx context.Context,
+	request *domain.LeaveRequest,
+	balance *domain.LeaveBalance,
+	balanceRepo *LeaveBalanceRepository,
+) error {
+	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
+		// Update request status (reject)
+		if err := r.updateWithTx(ctx, tx, request); err != nil {
+			return fmt.Errorf("update request: %w", err)
+		}
+
+		// Update balance (remove pending)
+		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
+			return fmt.Errorf("update balance: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// CancelAndUpdateBalanceAtomically cancels a leave request and updates balance in a single transaction.
+// This ensures all-or-nothing semantics: if balance update fails, request cancellation rolls back.
+func (r *LeaveRequestRepository) CancelAndUpdateBalanceAtomically(
+	ctx context.Context,
+	request *domain.LeaveRequest,
+	balance *domain.LeaveBalance,
+	balanceRepo *LeaveBalanceRepository,
+) error {
+	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
+		// Update request status (cancel)
+		if err := r.updateWithTx(ctx, tx, request); err != nil {
+			return fmt.Errorf("update request: %w", err)
+		}
+
+		// Update balance (remove used or pending)
+		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
+			return fmt.Errorf("update balance: %w", err)
+		}
+
+		return nil
+	})
+}
+
 // ListByEmployee retrieves all leave requests for a specific employee in a year.
 func (r *LeaveRequestRepository) ListByEmployee(ctx context.Context, tenantID domain.TenantID, employeeID domain.EmployeeID, year int) ([]*domain.LeaveRequest, error) {
 	var records []*domain.LeaveRequest

@@ -72,6 +72,9 @@ func (h *RejectLeaveRequestHandler) Handle(ctx context.Context, cmd RejectLeaveR
 
 	// Update balance: remove from pending
 	year := leaveRequest.StartDate().Year()
+	daysFloat := float64(leaveRequest.DaysCount())
+
+	// Get balance first (separate read transaction is acceptable)
 	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(
 		ctx,
 		tenantID,
@@ -88,18 +91,14 @@ func (h *RejectLeaveRequestHandler) Handle(ctx context.Context, cmd RejectLeaveR
 	}
 
 	// Remove from pending
-	daysFloat := float64(leaveRequest.DaysCount())
 	if err := balance.RemovePending(daysFloat); err != nil {
 		return nil, fmt.Errorf("removing pending days: %w", err)
 	}
 
-	if err := h.leaveBalanceRepo.Update(ctx, balance); err != nil {
-		return nil, fmt.Errorf("saving balance: %w", err)
-	}
-
-	// Persist the updated leave request
-	if err := h.leaveRequestRepo.Update(ctx, leaveRequest); err != nil {
-		return nil, fmt.Errorf("saving leave request: %w", err)
+	// Reject request and update balance atomically in a single transaction.
+	// If either operation fails, both roll back.
+	if err := h.leaveRequestRepo.RejectAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+		return nil, fmt.Errorf("rejecting leave request: %w", err)
 	}
 
 	// Publish domain event

@@ -30,6 +30,14 @@ type LeaveRequestRepository interface {
 	// ApproveAndUpdateBalanceAtomically approves a leave request and updates balance atomically.
 	// Both operations commit together or both rollback on error.
 	ApproveAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
+
+	// RejectAndUpdateBalanceAtomically rejects a leave request and updates balance atomically.
+	// Both operations commit together or both rollback on error.
+	RejectAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
+
+	// CancelAndUpdateBalanceAtomically cancels a leave request and updates balance atomically.
+	// Both operations commit together or both rollback on error.
+	CancelAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
 }
 
 // LeaveFilters defines optional filters for querying leave requests.
