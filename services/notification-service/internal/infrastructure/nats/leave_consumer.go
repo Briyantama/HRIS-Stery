@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
@@ -49,8 +50,13 @@ type leaveEventEnvelope struct {
 
 func (c *LeaveConsumer) Subscribe(ctx context.Context) error {
 	_, err := c.js.Subscribe("hris.operations.leave.>", func(msg *nats.Msg) {
-		c.handleMessage(context.Background(), msg)
-	})
+		msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		c.handleMessage(msgCtx, msg)
+	},
+		nats.Durable("notification-leave-consumer"),
+		nats.MaxAckPending(1000),
+		nats.AckWait(30*time.Second))
 	return err
 }
 
@@ -151,7 +157,15 @@ func (c *LeaveConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 
-	c.markProcessed(ctx, envelope.EventID)
+	// Mark as processed - must succeed before ACK
+	if err := c.markProcessed(ctx, envelope.EventID); err != nil {
+		c.logger.Error("failed to mark event as processed, NAKing for retry",
+			zap.String("event_id", envelope.EventID),
+			zap.Error(err))
+		sharednats.NakMessage(c.logger, msg)
+		return
+	}
+
 	sharednats.AckMessage(c.logger, msg)
 }
 
@@ -162,11 +176,14 @@ func (c *LeaveConsumer) isProcessed(ctx context.Context, eventID string) bool {
 	return err == nil
 }
 
-func (c *LeaveConsumer) markProcessed(ctx context.Context, eventID string) {
+func (c *LeaveConsumer) markProcessed(ctx context.Context, eventID string) error {
 	query := `
 		INSERT INTO notification.processed_events (event_id, processed_at)
 		VALUES ($1, NOW())
 		ON CONFLICT DO NOTHING
 	`
-	_, _ = c.pool.Exec(ctx, query, eventID)
+	if _, err := c.pool.Exec(ctx, query, eventID); err != nil {
+		return fmt.Errorf("insert processed_events: %w", err)
+	}
+	return nil
 }

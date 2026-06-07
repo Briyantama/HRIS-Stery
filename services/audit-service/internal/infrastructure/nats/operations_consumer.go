@@ -3,6 +3,8 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 
 	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
 	"github.com/hris-stery/hris-stery/services/audit-service/internal/application/commands"
@@ -36,10 +38,16 @@ func NewOperationsConsumer(
 }
 
 // Subscribe subscribes to operations events
+// Propagates shutdown context so graceful shutdown can drain handlers
 func (c *OperationsConsumer) Subscribe(ctx context.Context) error {
 	_, err := c.js.Subscribe("hris.operations.>", func(msg *nats.Msg) {
-		c.handleMessage(context.Background(), msg)
-	}, nats.Durable("audit-operations-consumer"))
+		msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		c.handleMessage(msgCtx, msg)
+	},
+		nats.Durable("audit-operations-consumer"),
+		nats.MaxAckPending(1000),
+		nats.AckWait(30*time.Second))
 	return err
 }
 
@@ -107,8 +115,15 @@ func (c *OperationsConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 
-	// Mark as processed
-	c.markProcessed(ctx, envelope.EventID, msg.Subject)
+	// Mark as processed - must succeed before ACK
+	if err := c.markProcessed(ctx, envelope.EventID, msg.Subject); err != nil {
+		c.logger.Error("failed to mark event as processed, NAKing for retry",
+			zap.String("event_id", envelope.EventID),
+			zap.Error(err))
+		sharednats.NakMessage(c.logger, msg)
+		return
+	}
+
 	c.logger.Debug("recorded audit entry from operations event",
 		zap.String("event_id", envelope.EventID),
 		zap.String("audit_entry_id", result.EntryID),
@@ -123,11 +138,14 @@ func (c *OperationsConsumer) isProcessed(ctx context.Context, eventID string) bo
 	return err == nil
 }
 
-func (c *OperationsConsumer) markProcessed(ctx context.Context, eventID string, subject string) {
+func (c *OperationsConsumer) markProcessed(ctx context.Context, eventID string, subject string) error {
 	query := `
 		INSERT INTO audit.processed_events (event_id, subject)
 		VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
 	`
-	_, _ = c.pool.Exec(ctx, query, eventID, subject)
+	if _, err := c.pool.Exec(ctx, query, eventID, subject); err != nil {
+		return fmt.Errorf("insert processed_events: %w", err)
+	}
+	return nil
 }

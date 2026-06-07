@@ -3,6 +3,8 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 
 	sharednats "github.com/hris-stery/hris-stery/services/_shared/nats"
 	"github.com/hris-stery/hris-stery/services/notification-service/internal/application/consumers"
@@ -38,8 +40,13 @@ func NewAuthConsumer(
 
 func (c *AuthConsumer) Subscribe(ctx context.Context) error {
 	_, err := c.js.Subscribe("hris.identity.user.>", func(msg *nats.Msg) {
-		c.handleMessage(context.Background(), msg)
-	})
+		msgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		c.handleMessage(msgCtx, msg)
+	},
+		nats.Durable("notification-auth-consumer"),
+		nats.MaxAckPending(1000),
+		nats.AckWait(30*time.Second))
 	return err
 }
 
@@ -88,7 +95,14 @@ func (c *AuthConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 		return
 	}
 
-	c.markProcessed(ctx, envelope.EventID)
+	if err := c.markProcessed(ctx, envelope.EventID); err != nil {
+		c.logger.Error("failed to mark event as processed, NAKing for retry",
+			zap.String("event_id", envelope.EventID),
+			zap.Error(err))
+		sharednats.NakMessage(c.logger, msg)
+		return
+	}
+
 	sharednats.AckMessage(c.logger, msg)
 }
 
@@ -99,11 +113,14 @@ func (c *AuthConsumer) isProcessed(ctx context.Context, eventID string) bool {
 	return err == nil
 }
 
-func (c *AuthConsumer) markProcessed(ctx context.Context, eventID string) {
+func (c *AuthConsumer) markProcessed(ctx context.Context, eventID string) error {
 	query := `
 		INSERT INTO notification.processed_events (event_id, processed_at)
 		VALUES ($1, NOW())
 		ON CONFLICT DO NOTHING
 	`
-	_, _ = c.pool.Exec(ctx, query, eventID)
+	if _, err := c.pool.Exec(ctx, query, eventID); err != nil {
+		return fmt.Errorf("insert processed_events: %w", err)
+	}
+	return nil
 }
