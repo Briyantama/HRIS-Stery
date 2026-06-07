@@ -34,55 +34,42 @@
       {
         "name": "adr-reminder",
         "description": "Remind to check ADR before modifying a service",
-        "pathPatterns": [
-          "services/*/internal/**",
-          "services/*/cmd/**"
-        ],
+        "pathPatterns": ["services/*/internal/**", "services/*/cmd/**"],
         "action": "warn",
         "message": "📋 Remember: Check relevant ADR in docs/adr/ before implementing. Use adr-review skill."
       },
       {
         "name": "rls-reminder",
         "description": "Remind about RLS when touching tables with tenant_id",
-        "pathPatterns": [
-          "services/*/migrations/*.sql"
-        ],
+        "pathPatterns": ["services/*/migrations/*.sql"],
         "action": "warn",
         "message": "🔒 Reminder: All tenant-scoped tables need FORCE ROW LEVEL SECURITY and tenant_isolation policy. Run migration-review skill."
       },
       {
         "name": "migration-down-check",
         "description": "Require both up and down migration files",
-        "pathPatterns": [
-          "services/*/migrations/*.up.sql"
-        ],
+        "pathPatterns": ["services/*/migrations/*.up.sql"],
         "action": "warn",
         "message": "⬇️ Reminder: Every .up.sql migration needs a corresponding .down.sql file that fully reverses it. Run migration-review skill."
       },
       {
         "name": "proto-before-handler",
         "description": "Remind to check proto contract before implementing handler",
-        "pathPatterns": [
-          "services/*/internal/interfaces/grpc/*.go"
-        ],
+        "pathPatterns": ["services/*/internal/interfaces/grpc/*.go"],
         "action": "warn",
         "message": "📝 Reminder: Proto contract must exist in proto/hris/{domain}/v1/ before implementing handler. Run proto-review skill."
       },
       {
         "name": "controller-logic-limit",
         "description": "Warn if Laravel controller might be too large",
-        "pathPatterns": [
-          "gateway/app/Http/Controllers/**"
-        ],
+        "pathPatterns": ["gateway/app/Http/Controllers/**"],
         "action": "warn",
         "message": "🎯 Reminder: Laravel controllers must be ≤20 lines of logic. Delegate to Service classes. Run laravel-gateway-reviewer."
       },
       {
         "name": "no-global-state",
         "description": "Block package-level database/service variables in Go",
-        "pathPatterns": [
-          "services/*/internal/**/*.go"
-        ],
+        "pathPatterns": ["services/*/internal/**/*.go"],
         "action": "warn",
         "message": "⚠️ Check: No package-level globals (var db, logger, etc). Use constructor injection. Run go-backend-reviewer."
       }

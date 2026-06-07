@@ -142,25 +142,96 @@ func (r *LeaveBalanceRepository) ListByEmployee(ctx context.Context, tenantID do
 // Update persists changes to a leave balance.
 func (r *LeaveBalanceRepository) Update(ctx context.Context, balance *domain.LeaveBalance) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(balance.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			UPDATE leave.leave_balances
-			SET used_days = $1, pending_days = $2, updated_at = $3
-			WHERE id = $4
-		`
-		result, err := tx.Exec(ctx, query,
-			balance.UsedDays(),
-			balance.PendingDays(),
-			balance.UpdatedAt(),
-			balance.ID().String(),
-		)
-		if err != nil {
-			return fmt.Errorf("update leave balance: %w", err)
-		}
-
-		if result.RowsAffected() == 0 {
-			return fmt.Errorf("leave balance not found")
-		}
-
-		return nil
+		return r.updateWithTx(ctx, tx, balance)
 	})
+}
+
+// updateWithTx persists changes to a leave balance within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveBalanceRepository) updateWithTx(ctx context.Context, tx pgx.Tx, balance *domain.LeaveBalance) error {
+	query := `
+		UPDATE leave.leave_balances
+		SET used_days = $1, pending_days = $2, updated_at = $3
+		WHERE id = $4
+	`
+	result, err := tx.Exec(ctx, query,
+		balance.UsedDays(),
+		balance.PendingDays(),
+		balance.UpdatedAt(),
+		balance.ID().String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update leave balance: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("leave balance not found")
+	}
+
+	return nil
+}
+
+// CreateWithTx persists a new leave balance within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveBalanceRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, balance *domain.LeaveBalance) error {
+	query := `
+		INSERT INTO leave.leave_balances
+		(id, tenant_id, employee_id, leave_type_id, year, entitled_days, used_days, pending_days, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`
+	_, err := tx.Exec(ctx, query,
+		balance.ID().String(),
+		balance.TenantID().String(),
+		balance.EmployeeID().String(),
+		balance.LeaveTypeID().String(),
+		balance.Year(),
+		balance.EntitledDays(),
+		balance.UsedDays(),
+		balance.PendingDays(),
+		balance.CreatedAt(),
+		balance.UpdatedAt(),
+	)
+	if err != nil {
+		return fmt.Errorf("insert leave balance: %w", err)
+	}
+	return nil
+}
+
+// GetByEmployeeAndTypeWithTx retrieves a balance for a specific employee and leave type within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveBalanceRepository) GetByEmployeeAndTypeWithTx(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID, employeeID domain.EmployeeID, leaveTypeID domain.LeaveTypeID, year int) (*domain.LeaveBalance, error) {
+	query := `
+		SELECT id, tenant_id, employee_id, leave_type_id, year, entitled_days, used_days, pending_days, created_at, updated_at
+		FROM leave.leave_balances
+		WHERE employee_id = $1 AND leave_type_id = $2 AND year = $3
+	`
+	var (
+		balanceID, empID, typeID            string
+		queryYear                           int
+		entitledDays, usedDays, pendingDays float64
+		createdAt, updatedAt                time.Time
+	)
+	rowErr := tx.QueryRow(ctx, query, employeeID.String(), leaveTypeID.String(), year).Scan(
+		&balanceID, &tenantID, &empID, &typeID, &queryYear, &entitledDays, &usedDays, &pendingDays, &createdAt, &updatedAt,
+	)
+	if rowErr == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if rowErr != nil {
+		return nil, fmt.Errorf("query leave balance: %w", rowErr)
+	}
+
+	balance := domain.RehydrateLeaveBalance(
+		domain.MustNewLeaveBalanceID(balanceID),
+		domain.MustNewTenantID(tenantID.String()),
+		domain.MustNewEmployeeID(empID),
+		domain.MustNewLeaveTypeID(typeID),
+		queryYear,
+		entitledDays,
+		usedDays,
+		pendingDays,
+		createdAt,
+		updatedAt,
+	)
+	return balance, nil
 }

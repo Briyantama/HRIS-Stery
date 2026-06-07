@@ -230,14 +230,45 @@ func (r *UserRepository) SetRoles(ctx context.Context, tenantID domain.TenantID,
 		if _, err := tx.Exec(ctx, `DELETE FROM auth.user_roles WHERE user_id = $1`, userID.String()); err != nil {
 			return fmt.Errorf("delete user roles: %w", err)
 		}
-		for _, roleID := range roleIDs {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES ($1, $2, NOW())`,
-				userID.String(), roleID.String(),
-			); err != nil {
-				return fmt.Errorf("insert user role: %w", err)
-			}
+
+		// Batch insert all roles in a single multi-row query instead of looping.
+		if len(roleIDs) == 0 {
+			return nil
 		}
+
+		// Build multi-row INSERT: (user_id, role_id, granted_at) VALUES ($1, $2, NOW()), ($3, $4, NOW()), ...
+		query := `INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES `
+		args := make([]interface{}, 0, len(roleIDs)*2)
+
+		for i, roleID := range roleIDs {
+			if i > 0 {
+				query += `, `
+			}
+			// Each role uses the same user_id, then its own roleID, then NOW()
+			argIdx := i*2 + 1
+			query += fmt.Sprintf(`($%d, $%d, NOW())`, 1, argIdx+1)
+			args = append(args, userID.String())
+			args = append(args, roleID.String())
+		}
+
+		// Deduplicate args: user_id appears in every row, so we only need it once
+		query = `INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES `
+		args = make([]interface{}, 0, len(roleIDs)+1)
+		args = append(args, userID.String())
+
+		for i, roleID := range roleIDs {
+			if i > 0 {
+				query += `, `
+			}
+			argIdx := i + 2
+			query += fmt.Sprintf(`($1, $%d, NOW())`, argIdx)
+			args = append(args, roleID.String())
+		}
+
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("insert user roles: %w", err)
+		}
+
 		return nil
 	})
 }

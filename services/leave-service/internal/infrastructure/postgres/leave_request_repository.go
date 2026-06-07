@@ -211,31 +211,193 @@ func (r *LeaveRequestRepository) ListByTenant(ctx context.Context, tenantID doma
 // Update persists changes to a leave request.
 func (r *LeaveRequestRepository) Update(ctx context.Context, request *domain.LeaveRequest) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			UPDATE leave.leave_requests
-			SET status = $1, rejection_reason = $2, approved_by_id = $3, approved_at = $4, updated_at = $5
-			WHERE id = $6
-		`
-		var approvedByID *string
-		if request.ApprovedByID() != nil {
-			id := request.ApprovedByID().String()
-			approvedByID = &id
-		}
+		return r.updateWithTx(ctx, tx, request)
+	})
+}
 
-		result, err := tx.Exec(ctx, query,
-			string(request.Status()),
-			request.RejectionReason(),
-			approvedByID,
-			request.ApprovedAt(),
-			request.UpdatedAt(),
-			request.ID().String(),
-		)
+// updateWithTx persists changes to a leave request within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveRequestRepository) updateWithTx(ctx context.Context, tx pgx.Tx, request *domain.LeaveRequest) error {
+	query := `
+		UPDATE leave.leave_requests
+		SET status = $1, rejection_reason = $2, approved_by_id = $3, approved_at = $4, updated_at = $5
+		WHERE id = $6
+	`
+	var approvedByID *string
+	if request.ApprovedByID() != nil {
+		id := request.ApprovedByID().String()
+		approvedByID = &id
+	}
+
+	result, err := tx.Exec(ctx, query,
+		string(request.Status()),
+		request.RejectionReason(),
+		approvedByID,
+		request.ApprovedAt(),
+		request.UpdatedAt(),
+		request.ID().String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update leave request: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("leave request not found")
+	}
+
+	return nil
+}
+
+// CreateWithTx persists a new leave request within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveRequestRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, request *domain.LeaveRequest) error {
+	query := `
+		INSERT INTO leave.leave_requests
+		(id, tenant_id, employee_id, leave_type_id, start_date, end_date, days_count, status, reason, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`
+	_, err := tx.Exec(ctx, query,
+		request.ID().String(),
+		request.TenantID().String(),
+		request.EmployeeID().String(),
+		request.LeaveTypeID().String(),
+		request.StartDate(),
+		request.EndDate(),
+		request.DaysCount(),
+		string(request.Status()),
+		request.Reason(),
+		request.CreatedAt(),
+		request.UpdatedAt(),
+	)
+	if err != nil {
+		return fmt.Errorf("insert leave request: %w", err)
+	}
+	return nil
+}
+
+// GetByIDWithTx retrieves a leave request by ID within an existing transaction.
+// Supports atomic operations wrapping multiple repositories.
+func (r *LeaveRequestRepository) GetByIDWithTx(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID, id domain.LeaveRequestID) (*domain.LeaveRequest, error) {
+	query := `
+		SELECT id, tenant_id, employee_id, leave_type_id, start_date, end_date, days_count, status, reason,
+		       rejection_reason, approved_by_id, approved_at, created_at, updated_at
+		FROM leave.leave_requests
+		WHERE id = $1
+	`
+	var (
+		requestID, empID, leaveTypeID   string
+		startDate, endDate              time.Time
+		daysCount                       int
+		status, reason, rejectionReason string
+		approvedByID                    *string
+		approvedAt                      *time.Time
+		createdAt, updatedAt            time.Time
+	)
+	rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
+		&requestID, &tenantID, &empID, &leaveTypeID, &startDate, &endDate, &daysCount,
+		&status, &reason, &rejectionReason, &approvedByID, &approvedAt, &createdAt, &updatedAt,
+	)
+	if rowErr == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if rowErr != nil {
+		return nil, fmt.Errorf("query leave request: %w", rowErr)
+	}
+
+	var approvedByEmpID *domain.EmployeeID
+	if approvedByID != nil {
+		a := domain.MustNewEmployeeID(*approvedByID)
+		approvedByEmpID = &a
+	}
+
+	request := domain.RehydrateLeaveRequest(
+		domain.MustNewLeaveRequestID(requestID),
+		domain.MustNewTenantID(tenantID.String()),
+		domain.MustNewEmployeeID(empID),
+		domain.MustNewLeaveTypeID(leaveTypeID),
+		startDate,
+		endDate,
+		daysCount,
+		domain.LeaveStatus(status),
+		reason,
+		rejectionReason,
+		approvedByEmpID,
+		approvedAt,
+		createdAt,
+		updatedAt,
+	)
+	return request, nil
+}
+
+// CreateAndUpdateBalanceAtomically wraps create leave request and update balance in a single transaction.
+// This ensures all-or-nothing semantics: if creation succeeds but balance update fails, the request insert rolls back.
+func (r *LeaveRequestRepository) CreateAndUpdateBalanceAtomically(
+	ctx context.Context,
+	request *domain.LeaveRequest,
+	balance *domain.LeaveBalance,
+	balanceRepo *LeaveBalanceRepository,
+) error {
+	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
+		if err := r.CreateWithTx(ctx, tx, request); err != nil {
+			return fmt.Errorf("create leave request: %w", err)
+		}
+		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
+			return fmt.Errorf("update balance: %w", err)
+		}
+		return nil
+	})
+}
+
+// UpdateAndGetBalanceAtomically updates a leave request and retrieves updated balance in a single transaction.
+// Used for approve/reject/cancel operations where balance state must be consistent.
+func (r *LeaveRequestRepository) UpdateAndGetBalanceAtomically(
+	ctx context.Context,
+	request *domain.LeaveRequest,
+	balanceRepo *LeaveBalanceRepository,
+	tenantID domain.TenantID,
+	employeeID domain.EmployeeID,
+	leaveTypeID domain.LeaveTypeID,
+	year int,
+) (*domain.LeaveBalance, error) {
+	var balance *domain.LeaveBalance
+	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
+		// Get balance for update
+		b, err := balanceRepo.GetByEmployeeAndTypeWithTx(ctx, tx, tenantID, employeeID, leaveTypeID, year)
 		if err != nil {
-			return fmt.Errorf("update leave request: %w", err)
+			return fmt.Errorf("get balance: %w", err)
+		}
+		if b == nil {
+			return fmt.Errorf("balance not found")
+		}
+		balance = b
+
+		// Update request status
+		if err := r.updateWithTx(ctx, tx, request); err != nil {
+			return fmt.Errorf("update request: %w", err)
 		}
 
-		if result.RowsAffected() == 0 {
-			return fmt.Errorf("leave request not found")
+		return nil
+	})
+	return balance, err
+}
+
+// ApproveAndUpdateBalanceAtomically approves a leave request and updates balance in a single transaction.
+// This ensures all-or-nothing semantics: if balance update fails, request approval rolls back.
+func (r *LeaveRequestRepository) ApproveAndUpdateBalanceAtomically(
+	ctx context.Context,
+	request *domain.LeaveRequest,
+	balance *domain.LeaveBalance,
+	balanceRepo *LeaveBalanceRepository,
+) error {
+	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
+		// Update request status (approve)
+		if err := r.updateWithTx(ctx, tx, request); err != nil {
+			return fmt.Errorf("update request: %w", err)
+		}
+
+		// Update balance (pending -> used)
+		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
+			return fmt.Errorf("update balance: %w", err)
 		}
 
 		return nil
