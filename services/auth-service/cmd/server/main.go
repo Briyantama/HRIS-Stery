@@ -9,13 +9,13 @@ import (
 	"time"
 
 	authv1 "github.com/hris-stery/hris-stery/gen/go/hris/auth/v1"
+	"github.com/hris-stery/hris-stery/services/_shared/database"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/application/queries"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/config"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres"
 	grpchandlers "github.com/hris-stery/hris-stery/services/auth-service/internal/interfaces/grpc"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -33,16 +33,12 @@ func main() {
 	natsURL := envOr("NATS_URL", "nats://localhost:4222")
 	grpcPort := envOr("GRPC_PORT", "50051")
 
-	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	pool, err := database.SetupPool(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("parse database URL: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		log.Fatalf("setup database pool: %v", err)
 	}
 	defer pool.Close()
-	logger.Info("connected to PostgreSQL")
+	logger.Info("connected to PostgreSQL", zap.Int32("maxConns", 25))
 
 	redisOpts, err := redis.ParseURL(redisURL)
 	if err != nil {

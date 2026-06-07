@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/hris-stery/hris-stery/services/_shared/database"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -78,10 +78,10 @@ func main() {
 	)
 
 	// Connect PostgreSQL
-	logger.Info("connecting to PostgreSQL", zap.String("database_url", databaseURL))
-	pool, err := pgxpool.New(ctx, databaseURL)
+	logger.Info("connecting to PostgreSQL")
+	pool, err := database.SetupPool(ctx, databaseURL)
 	if err != nil {
-		logger.Fatal("failed to connect PostgreSQL", zap.Error(err))
+		logger.Fatal("failed to setup database pool", zap.Error(err))
 	}
 	defer pool.Close()
 

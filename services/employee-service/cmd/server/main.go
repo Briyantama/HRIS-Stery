@@ -8,12 +8,12 @@ import (
 	"os"
 
 	employeev1 "github.com/hris-stery/hris-stery/gen/go/hris/employee/v1"
+	"github.com/hris-stery/hris-stery/services/_shared/database"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/queries"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure/postgres"
 	grpchandlers "github.com/hris-stery/hris-stery/services/employee-service/internal/interfaces/grpc"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -29,16 +29,12 @@ func main() {
 	natsURL := envOr("NATS_URL", "nats://localhost:4222")
 	grpcPort := envOr("GRPC_PORT", "50052")
 
-	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	pool, err := database.SetupPool(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("parse database URL: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		log.Fatalf("setup database pool: %v", err)
 	}
 	defer pool.Close()
-	logger.Info("connected to PostgreSQL")
+	logger.Info("connected to PostgreSQL", zap.Int32("maxConns", 25))
 
 	natsConn, err := nats.Connect(natsURL)
 	if err != nil {
