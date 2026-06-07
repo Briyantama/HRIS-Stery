@@ -39,4 +39,5 @@ type PermissionRepository interface {
 	AssignToRole(ctx context.Context, roleID RoleID, permission Permission) error
 	RemoveFromRole(ctx context.Context, roleID RoleID, permission Permission) error
 	GetForRole(ctx context.Context, roleID RoleID) ([]Permission, error)
+	GetForRoles(ctx context.Context, roleIDs []RoleID) ([]Permission, error)
 }

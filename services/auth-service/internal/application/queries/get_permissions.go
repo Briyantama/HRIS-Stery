@@ -45,21 +45,17 @@ func (h *GetPermissionsHandler) Handle(ctx context.Context, query GetPermissions
 		return nil, fmt.Errorf("fetch roles: %w", err)
 	}
 
-	permissionSet := make(map[string]domain.Permission)
-	for _, role := range roles {
-		perms, err := h.permissionRepo.GetForRole(ctx, role.ID())
-		if err != nil {
-			return nil, fmt.Errorf("get permissions for role %s: %w", role.ID().String(), err)
-		}
-		for _, perm := range perms {
-			permissionSet[perm.String()] = perm
-		}
+	// Convert roles to roleIDs
+	roleIDs := make([]domain.RoleID, len(roles))
+	for i, role := range roles {
+		roleIDs[i] = role.ID()
 	}
 
-	// Return as slice
-	result := make([]domain.Permission, 0, len(permissionSet))
-	for _, perm := range permissionSet {
-		result = append(result, perm)
+	// Get all permissions for these roles in a single query (no N+1)
+	perms, err := h.permissionRepo.GetForRoles(ctx, roleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("fetch permissions: %w", err)
 	}
-	return result, nil
+
+	return perms, nil
 }

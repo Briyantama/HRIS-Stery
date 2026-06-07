@@ -143,3 +143,43 @@ func (r *PermissionRepository) GetForRole(ctx context.Context, roleID domain.Rol
 	}
 	return perms, nil
 }
+
+// GetForRoles retrieves all unique permissions assigned to multiple roles in a single query.
+// This prevents N+1 queries when fetching permissions for multiple roles.
+func (r *PermissionRepository) GetForRoles(ctx context.Context, roleIDs []domain.RoleID) ([]domain.Permission, error) {
+	if len(roleIDs) == 0 {
+		return []domain.Permission{}, nil
+	}
+
+	// Convert roleIDs to strings for SQL
+	roleIDStrs := make([]string, len(roleIDs))
+	for i, id := range roleIDs {
+		roleIDStrs[i] = id.String()
+	}
+
+	query := `
+		SELECT DISTINCT p.name
+		FROM auth.permissions p
+		JOIN auth.role_permissions rp ON p.id = rp.permission_id
+		WHERE rp.role_id = ANY($1)
+		ORDER BY p.name
+	`
+	rows, err := r.pool.Query(ctx, query, roleIDStrs)
+	if err != nil {
+		return nil, fmt.Errorf("query permissions for roles: %w", err)
+	}
+	defer rows.Close()
+
+	var perms []domain.Permission
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan permission: %w", err)
+		}
+		perms = append(perms, domain.Permission(name))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate permissions: %w", err)
+	}
+	return perms, nil
+}
