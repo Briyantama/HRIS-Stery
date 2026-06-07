@@ -7,12 +7,13 @@ import (
 	"os"
 
 	pb "github.com/hris-stery/hris-stery/gen/go/hris/document/v1"
+	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/application/queries"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/infrastructure/postgres"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/infrastructure/storage"
 	grpchandlers "github.com/hris-stery/hris-stery/services/document-service/internal/interfaces/grpc"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -42,21 +43,11 @@ func main() {
 
 	// Connect to PostgreSQL
 	ctx := context.Background()
-	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	pool, err := database.SetupPool(ctx, dbURL)
 	if err != nil {
-		logger.Fatal("failed to parse database URL", zap.Error(err))
-	}
-
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		logger.Fatal("failed to connect to database", zap.Error(err))
+		logger.Fatal("failed to setup database pool", zap.Error(err))
 	}
 	defer pool.Close()
-
-	// Verify connection
-	if err = pool.Ping(ctx); err != nil {
-		logger.Fatal("failed to ping database", zap.Error(err))
-	}
 
 	logger.Info("connected to PostgreSQL")
 
@@ -102,7 +93,7 @@ func main() {
 	metadataHandler := queries.NewGetDocumentMetadataHandler(docRepo, versionRepo, logger)
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
 
 	// Register Document Service
 	documentServer := grpchandlers.NewDocumentServiceServer(
@@ -132,7 +123,21 @@ func main() {
 
 	logger.Info("starting gRPC server", zap.String("port", grpcPort))
 
-	if err = grpcServer.Serve(listener); err != nil {
-		logger.Fatal("gRPC server error", zap.Error(err))
-	}
+	// Start gRPC server in goroutine
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
+	// Setup graceful shutdown
+	shutdown := server.NewGracefulShutdown(grpcServer, logger)
+	shutdown.RegisterMinIOClose(func() error {
+		minioClient.Close()
+		return nil
+	})
+	shutdown.RegisterDatabaseClose(pool)
+
+	// Wait for shutdown signal
+	shutdown.WaitForShutdown()
 }

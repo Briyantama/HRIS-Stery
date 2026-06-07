@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -157,7 +158,7 @@ func main() {
 	logger.Info("subscribed to all NATS events")
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
 	notificationService := grpchandlers.NewNotificationServiceServer(
 		logger,
 		sendHandler,
@@ -182,7 +183,19 @@ func main() {
 	}
 
 	logger.Info("notification-service ready", zap.Int("grpc_port", grpcPort))
-	if err := grpcServer.Serve(listener); err != nil {
-		logger.Fatal("gRPC server error", zap.Error(err))
-	}
+
+	// Start gRPC server in goroutine
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
+	// Setup graceful shutdown
+	shutdown := server.NewGracefulShutdown(grpcServer, logger)
+	shutdown.RegisterNATSDrain(nc)
+	shutdown.RegisterDatabaseClose(pool)
+
+	// Wait for shutdown signal
+	shutdown.WaitForShutdown()
 }

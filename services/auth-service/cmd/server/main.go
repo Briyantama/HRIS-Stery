@@ -10,8 +10,10 @@ import (
 
 	authv1 "github.com/hris-stery/hris-stery/gen/go/hris/auth/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/application/queries"
+	healthsvc "github.com/hris-stery/hris-stery/services/auth-service/internal/health"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/config"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres"
@@ -20,6 +22,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -45,6 +48,7 @@ func main() {
 		log.Fatalf("parse redis URL: %v", err)
 	}
 	redisClient := redis.NewClient(redisOpts)
+	defer redisClient.Close()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		log.Fatalf("connect to Redis: %v", err)
 	}
@@ -88,7 +92,7 @@ func main() {
 	validateTokenHandler := queries.NewValidateTokenHandler(tokenSvc)
 	getPermissionsHandler := queries.NewGetPermissionsHandler(userRepo, roleRepo, permissionRepo)
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
 	authService := grpchandlers.NewAuthServiceServer(
 		loginHandler,
 		refreshTokenHandler,
@@ -99,15 +103,33 @@ func main() {
 	)
 	authv1.RegisterAuthServiceServer(grpcServer, authService)
 
+	// Register health check service
+	healthService := healthsvc.NewHealthService(pool, redisClient, natsConn, logger)
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthService)
+	logger.Info("gRPC Health service registered")
+
 	listener, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
 		log.Fatalf("listen on port %s: %v", grpcPort, err)
 	}
 
 	logger.Info(fmt.Sprintf("starting gRPC server on port %s", grpcPort))
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("serve gRPC: %v", err)
-	}
+
+	// Start gRPC server in goroutine
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
+	// Setup graceful shutdown
+	shutdown := server.NewGracefulShutdown(grpcServer, logger)
+	shutdown.RegisterNATSDrain(natsConn)
+	shutdown.RegisterRedisClose(redisClient)
+	shutdown.RegisterDatabaseClose(pool)
+
+	// Wait for shutdown signal
+	shutdown.WaitForShutdown()
 }
 
 func envOr(key, fallback string) string {

@@ -9,6 +9,7 @@ import (
 
 	auditv1 "github.com/hris-stery/hris-stery/gen/go/hris/audit/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/audit-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/audit-service/internal/application/queries"
 	healthsvc "github.com/hris-stery/hris-stery/services/audit-service/internal/health"
@@ -99,7 +100,7 @@ func main() {
 	logger.Info("subscribed to notification events")
 
 	// Create gRPC server with options
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
 
 	// Register audit service
 	auditService := grpchandlers.NewAuditServiceServer(recordHandler, queryHandler, logger)
@@ -118,9 +119,21 @@ func main() {
 	}
 
 	logger.Info(fmt.Sprintf("starting gRPC server on port %s", grpcPort))
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("serve gRPC: %v", err)
-	}
+
+	// Start gRPC server in goroutine
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
+	// Setup graceful shutdown
+	shutdown := server.NewGracefulShutdown(grpcServer, logger)
+	shutdown.RegisterNATSDrain(nc)
+	shutdown.RegisterDatabaseClose(pool)
+
+	// Wait for shutdown signal
+	shutdown.WaitForShutdown()
 }
 
 func envOr(key, fallback string) string {

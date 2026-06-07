@@ -9,8 +9,10 @@ import (
 
 	attendancev1 "github.com/hris-stery/hris-stery/gen/go/hris/attendance/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/attendance-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/attendance-service/internal/application/queries"
+	healthsvc "github.com/hris-stery/hris-stery/services/attendance-service/internal/health"
 	"github.com/hris-stery/hris-stery/services/attendance-service/internal/infrastructure/nats"
 	"github.com/hris-stery/hris-stery/services/attendance-service/internal/infrastructure/postgres"
 	grpchandlers "github.com/hris-stery/hris-stery/services/attendance-service/internal/interfaces/grpc"
@@ -18,6 +20,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -69,7 +72,7 @@ func main() {
 	getDailySummaryHandler := queries.NewGetDailySummaryHandler(attendanceRepo)
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
 	attendanceService := grpchandlers.NewAttendanceServiceServer(
 		checkInHandler,
 		checkOutHandler,
@@ -80,6 +83,11 @@ func main() {
 	)
 	attendancev1.RegisterAttendanceServiceServer(grpcServer, attendanceService)
 
+	// Register health check service
+	healthService := healthsvc.NewHealthService(pool, natsConn, logger)
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthService)
+	logger.Info("gRPC Health service registered")
+
 	// Start listening on gRPC port
 	listener, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
@@ -87,9 +95,21 @@ func main() {
 	}
 
 	logger.Info(fmt.Sprintf("starting gRPC server on port %s", grpcPort))
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("serve gRPC: %v", err)
-	}
+
+	// Start gRPC server in goroutine
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			logger.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
+	// Setup graceful shutdown
+	shutdown := server.NewGracefulShutdown(grpcServer, logger)
+	shutdown.RegisterNATSDrain(natsConn)
+	shutdown.RegisterDatabaseClose(pool)
+
+	// Wait for shutdown signal
+	shutdown.WaitForShutdown()
 }
 
 func envOr(key, fallback string) string {
