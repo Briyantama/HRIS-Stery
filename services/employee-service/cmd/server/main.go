@@ -15,6 +15,7 @@ import (
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/queries"
 	healthsvc "github.com/hris-stery/hris-stery/services/employee-service/internal/health"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure"
+	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure/cache"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/infrastructure/postgres"
 	grpchandlers "github.com/hris-stery/hris-stery/services/employee-service/internal/interfaces/grpc"
 	"github.com/nats-io/nats.go"
@@ -50,10 +51,10 @@ func main() {
 	defer natsConn.Close()
 	logger.Info("connected to NATS")
 
-	// Create repositories
+	// Create repositories with caching for read-heavy data
 	employeeRepo := postgres.NewEmployeeRepository(pool)
-	departmentRepo := postgres.NewDepartmentRepository(pool)
-	positionRepo := postgres.NewPositionRepository(pool)
+	departmentRepo := cache.NewDepartmentCacheRepository(postgres.NewDepartmentRepository(pool))
+	positionRepo := cache.NewPositionCacheRepository(postgres.NewPositionRepository(pool))
 
 	// Create event publisher
 	eventPub, err := infrastructure.NewNATSPublisher(natsConn)
