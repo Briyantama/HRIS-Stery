@@ -12,18 +12,26 @@ SHELL := bash
         dev dev-down dev-reset dev-logs dev-ps \
         proto-deps proto-gen proto-lint proto-breaking \
         migrate-up migrate-down migrate-status \
-        test test-go test-integration test-laravel test-svelte \
+        test test-go test-integration test-laravel test-svelte test-e2e \
         lint lint-go lint-laravel lint-svelte \
         build build-go build-laravel build-svelte \
-        tidy vet clean clean-svelte setup \
+        install-laravel reinstall-laravel install-svelte install-apps \
+        dev-laravel dev-svelte dev-apps \
+        format-laravel format-svelte \
+        all-go all-laravel all-svelte all-apps \
+        require-laravel-vendor require-svelte-modules \
+        tidy vet clean clean-go clean-laravel clean-svelte setup setup-apps \
         go-services
 
 # ── Discovered paths (only *-service dirs; excludes _shared) ───────────────
 GO_SERVICES := $(sort $(patsubst services/%/,%,$(dir $(wildcard services/*-service/go.mod))))
 MIGRATE_SERVICES := $(sort $(patsubst services/%/,%,$(dir $(wildcard services/*-service/migrations))))
 
-HAS_API_GATEWAY := $(wildcard apps/api-gateway/composer.json)
-HAS_WEB := $(wildcard apps/web/package.json)
+API_GATEWAY_DIR := apps/api-gateway
+WEB_DIR         := apps/web
+
+HAS_API_GATEWAY := $(wildcard $(API_GATEWAY_DIR)/composer.json)
+HAS_WEB         := $(wildcard $(WEB_DIR)/package.json)
 
 COMPOSE := docker compose -f deploy/docker/docker-compose.yml
 DB_URL ?= postgres://hris_admin:hris_admin_secret@localhost:5432/hris_db?sslmode=disable
@@ -67,19 +75,41 @@ help:
 	@echo "  make update-go-mods   update go.mod for all Go services"
 	@echo "  make all-go           run all go vet, fmt, and lint commands for all Go services"
 	@echo ""
-	@echo "Apps (skipped if directory missing):"
-	@echo "  make test-laravel     Pest (apps/api-gateway)"
-	@echo "  make test-svelte      Vitest (apps/web)"
-	@echo "  make lint-laravel     Laravel Pint"
+	@echo "Laravel API Gateway ($(API_GATEWAY_DIR), skipped if composer.json missing):"
+	@echo "  make install-laravel  composer install (Windows: disables 7zip extractor)"
+	@echo "  make reinstall-laravel  remove vendor/ and reinstall from composer.lock"
+	@echo "  make dev-laravel      php artisan serve (port 8000)"
+	@echo "  make test-laravel     Pest unit/feature tests"
+	@echo "  make lint-laravel     Laravel Pint (--test)"
+	@echo "  make format-laravel   Laravel Pint (auto-fix)"
+	@echo "  make build-laravel    composer install + optimize autoloader"
+	@echo "  make all-laravel      lint + format + test"
+	@echo "  make clean-laravel    clear Laravel caches"
+	@echo ""
+	@echo "SvelteKit Frontend ($(WEB_DIR), skipped if package.json missing):"
+	@echo "  make install-svelte   npm ci (or npm install)"
+	@echo "  make dev-svelte       Vite dev server"
+	@echo "  make preview-svelte   production preview (port 4173)"
+	@echo "  make test-svelte      Vitest unit tests"
+	@echo "  make test-e2e         Playwright E2E tests"
 	@echo "  make lint-svelte      ESLint + svelte-check"
+	@echo "  make format-svelte    Prettier (if configured)"
 	@echo "  make build-svelte     SvelteKit production build"
+	@echo "  make all-svelte       lint + test + build"
+	@echo "  make clean-svelte     remove .svelte-kit and build/"
+	@echo ""
+	@echo "Apps (aggregates):"
+	@echo "  make install-apps     install-laravel + install-svelte"
+	@echo "  make dev-apps         print dev server instructions"
+	@echo "  make all-apps         all-laravel + all-svelte"
 	@echo ""
 	@echo "Aggregates:"
-	@echo "  make test             test-go + optional app tests"
-	@echo "  make lint             lint-go + optional app lints"
-	@echo "  make build            build-go + optional build-svelte"
-	@echo "  make clean            go clean + SvelteKit artifacts"
+	@echo "  make test             test-go + laravel + svelte"
+	@echo "  make lint             lint-go + laravel + svelte"
+	@echo "  make build            build-go + laravel + svelte"
+	@echo "  make clean            go clean + laravel + svelte artifacts"
 	@echo "  make setup            dev + migrate-up"
+	@echo "  make setup-apps       install-apps (after scaffold is ready)"
 	@echo "  make check-tools      Verify required CLI tools"
 	@echo "  make go-services      Print discovered Go service names"
 	@echo ""
@@ -94,6 +124,10 @@ check-tools:
 	@command -v migrate >/dev/null 2>&1 || echo "WARN: migrate not found (needed for migrate-*)"
 	@command -v docker >/dev/null 2>&1 || echo "WARN: docker not found (needed for dev)"
 	@command -v golangci-lint >/dev/null 2>&1 || echo "WARN: golangci-lint not found (lint-go will skip)"
+	@command -v php >/dev/null 2>&1 || echo "WARN: php not found (needed for Laravel)"
+	@command -v composer >/dev/null 2>&1 || echo "WARN: composer not found (needed for Laravel)"
+	@command -v node >/dev/null 2>&1 || echo "WARN: node not found (needed for SvelteKit)"
+	@command -v npm >/dev/null 2>&1 || echo "WARN: npm not found (needed for SvelteKit)"
 	@echo "OK: core tools present"
 
 # ──────────────────────────────────────────────────────────────
@@ -246,49 +280,183 @@ all-go:
 	$(call go_foreach,golangci-lint run --timeout=5m ./...)
 
 # ──────────────────────────────────────────────────────────────
-# Apps (optional — skipped when directory missing)
+# Laravel API Gateway (optional — skipped when composer.json missing)
 # ──────────────────────────────────────────────────────────────
-test-laravel:
+install-laravel:
 ifneq ($(HAS_API_GATEWAY),)
-	cd apps/api-gateway && ./vendor/bin/pest --parallel
+	cd $(API_GATEWAY_DIR) && COMPOSER_DISABLE_7ZIP=1 composer install --no-progress --prefer-dist --optimize-autoloader
 else
-	@echo "SKIP test-laravel: apps/api-gateway not present"
+	@echo "SKIP install-laravel: $(API_GATEWAY_DIR)/composer.json not present"
 endif
 
-test-svelte:
-ifneq ($(HAS_WEB),)
-	cd apps/web && npm run test:unit
+reinstall-laravel:
+ifneq ($(HAS_API_GATEWAY),)
+	rm -rf $(API_GATEWAY_DIR)/vendor
+	cd $(API_GATEWAY_DIR) && COMPOSER_DISABLE_7ZIP=1 composer install --no-progress --prefer-dist --optimize-autoloader
 else
-	@echo "SKIP test-svelte: apps/web not present"
+	@echo "SKIP reinstall-laravel: $(API_GATEWAY_DIR)/composer.json not present"
+endif
+
+dev-laravel:
+ifneq ($(HAS_API_GATEWAY),)
+	cd $(API_GATEWAY_DIR) && php artisan serve --host=0.0.0.0 --port=8000
+else
+	@echo "SKIP dev-laravel: $(API_GATEWAY_DIR)/composer.json not present"
+endif
+
+test-laravel:
+ifneq ($(HAS_API_GATEWAY),)
+	cd $(API_GATEWAY_DIR) && ./vendor/bin/pest --parallel
+else
+	@echo "SKIP test-laravel: $(API_GATEWAY_DIR)/composer.json not present"
 endif
 
 lint-laravel:
 ifneq ($(HAS_API_GATEWAY),)
-	cd apps/api-gateway && ./vendor/bin/pint --test
+	cd $(API_GATEWAY_DIR) && ./vendor/bin/pint --test
 else
-	@echo "SKIP lint-laravel: apps/api-gateway not present"
+	@echo "SKIP lint-laravel: $(API_GATEWAY_DIR)/composer.json not present"
 endif
 
-lint-svelte:
-ifneq ($(HAS_WEB),)
-	cd apps/web && npm run lint && npm run check
+format-laravel:
+ifneq ($(HAS_API_GATEWAY),)
+	cd $(API_GATEWAY_DIR) && ./vendor/bin/pint
 else
-	@echo "SKIP lint-svelte: apps/web not present"
+	@echo "SKIP format-laravel: $(API_GATEWAY_DIR)/composer.json not present"
 endif
 
 build-laravel:
 ifneq ($(HAS_API_GATEWAY),)
-	@echo "SKIP build-laravel: no standard build target defined for API gateway"
+	cd $(API_GATEWAY_DIR) && composer install --no-progress --prefer-dist --optimize-autoloader
 else
-	@echo "SKIP build-laravel: apps/api-gateway not present"
+	@echo "SKIP build-laravel: $(API_GATEWAY_DIR)/composer.json not present"
+endif
+
+clean-laravel:
+ifneq ($(HAS_API_GATEWAY),)
+	cd $(API_GATEWAY_DIR) && php artisan cache:clear 2>/dev/null || true
+	cd $(API_GATEWAY_DIR) && php artisan config:clear 2>/dev/null || true
+	cd $(API_GATEWAY_DIR) && php artisan route:clear 2>/dev/null || true
+	cd $(API_GATEWAY_DIR) && php artisan view:clear 2>/dev/null || true
+	@echo "Laravel caches cleared (vendor/ kept)"
+else
+	@echo "SKIP clean-laravel: $(API_GATEWAY_DIR)/composer.json not present"
+endif
+
+require-laravel-vendor:
+ifneq ($(HAS_API_GATEWAY),)
+	@if [ ! -d "$(API_GATEWAY_DIR)/vendor" ]; then \
+		echo "ERROR: $(API_GATEWAY_DIR)/vendor missing. Run: make install-laravel"; \
+		exit 1; \
+	fi
+endif
+
+all-laravel: require-laravel-vendor lint-laravel format-laravel test-laravel
+
+# ──────────────────────────────────────────────────────────────
+# SvelteKit Frontend (optional — skipped when package.json missing)
+# ──────────────────────────────────────────────────────────────
+install-svelte:
+ifneq ($(HAS_WEB),)
+	@for attempt in 1 2 3; do \
+		echo "→ npm install (attempt $$attempt/3)..."; \
+		(cd $(WEB_DIR) && npm install) && exit 0; \
+		[ $$attempt -lt 3 ] && echo "npm failed (ECONNRESET/network?), retrying in 5s..." && sleep 5; \
+	done; \
+	echo "ERROR: npm install failed after 3 attempts. Check network/proxy or run: cd $(WEB_DIR) && npm install"; \
+	exit 1
+else
+	@echo "SKIP install-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+dev-svelte:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && npm run dev
+else
+	@echo "SKIP dev-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+preview-svelte:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && npm run preview -- --port 4173 --host
+else
+	@echo "SKIP preview-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+test-svelte:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && npm run test:unit
+else
+	@echo "SKIP test-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+test-e2e:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && npx playwright install --with-deps chromium
+	cd $(WEB_DIR) && npm run build
+	cd $(WEB_DIR) && PLAYWRIGHT_BASE_URL=http://localhost:4173 npm run test:e2e
+else
+	@echo "SKIP test-e2e: $(WEB_DIR)/package.json not present"
+endif
+
+lint-svelte:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && npm run lint && npm run check
+else
+	@echo "SKIP lint-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+format-svelte:
+ifneq ($(HAS_WEB),)
+	@if cd $(WEB_DIR) && npm run | grep -q 'format'; then \
+		cd $(WEB_DIR) && npm run format; \
+	else \
+		echo "SKIP format-svelte: no npm run format script in $(WEB_DIR)/package.json"; \
+	fi
+else
+	@echo "SKIP format-svelte: $(WEB_DIR)/package.json not present"
 endif
 
 build-svelte:
 ifneq ($(HAS_WEB),)
-	cd apps/web && npm run build
+	cd $(WEB_DIR) && npm run build
 else
-	@echo "SKIP build-svelte: apps/web not present"
+	@echo "SKIP build-svelte: $(WEB_DIR)/package.json not present"
 endif
+
+clean-svelte:
+ifneq ($(HAS_WEB),)
+	cd $(WEB_DIR) && rm -rf .svelte-kit build
+	@echo "Removed SvelteKit build artifacts (node_modules kept)"
+else
+	@echo "SKIP clean-svelte: $(WEB_DIR)/package.json not present"
+endif
+
+require-svelte-modules:
+ifneq ($(HAS_WEB),)
+	@if [ ! -d "$(WEB_DIR)/node_modules" ]; then \
+		echo "ERROR: $(WEB_DIR)/node_modules missing. Run: make install-svelte"; \
+		exit 1; \
+	fi
+endif
+
+all-svelte: require-svelte-modules lint-svelte test-svelte build-svelte
+
+# ──────────────────────────────────────────────────────────────
+# Apps — combined helpers
+# ──────────────────────────────────────────────────────────────
+install-apps: install-laravel install-svelte
+
+dev-apps:
+	@echo "Start app dev servers in separate terminals:"
+	@echo "  make dev-laravel   → http://localhost:8000"
+	@echo "  make dev-svelte    → http://localhost:5173 (default Vite port)"
+
+all-apps: all-laravel all-svelte all-go
+	@echo "All app checks passed."
+
+setup-apps: install-apps
+	@echo "App dependencies installed. Run 'make dev-apps' for next steps."
 
 # ──────────────────────────────────────────────────────────────
 # Aggregates
@@ -297,22 +465,15 @@ test: test-go test-laravel test-svelte
 
 lint: lint-go lint-laravel lint-svelte
 
-build: build-go build-svelte
+build: build-go build-laravel build-svelte
 
 # ──────────────────────────────────────────────────────────────
 # Cleanup
 # ──────────────────────────────────────────────────────────────
-clean:
+clean-go:
 	$(call go_foreach,go clean ./...)
-	@$(MAKE) clean-svelte
 
-clean-svelte:
-ifneq ($(HAS_WEB),)
-	cd apps/web && rm -rf .svelte-kit build
-	@echo "Removed SvelteKit build artifacts (node_modules kept)"
-else
-	@echo "SKIP clean-svelte: apps/web not present"
-endif
+clean: clean-go clean-laravel clean-svelte
 
 setup: dev migrate-up
 	@echo "Dev environment ready. Run 'make dev-logs' to watch."

@@ -38,7 +38,7 @@ function createAuthStore() {
 			try {
 				initialState.token = storedToken;
 				initialState.user = JSON.parse(storedUser);
-			} catch (e) {
+			} catch {
 				// Invalid stored data, clear it
 				localStorage.removeItem('auth_token');
 				localStorage.removeItem('auth_user');

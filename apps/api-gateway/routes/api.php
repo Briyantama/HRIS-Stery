@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Middleware\JwtValidation;
+use App\Http\Middleware\TenantResolver;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,8 +36,8 @@ Route::get('health', function () {
 // Protected routes (JWT validation + Tenant enforcement required)
 Route::middleware([
     'api',
-    \App\Http\Middleware\JwtValidation::class,
-    \App\Http\Middleware\TenantResolver::class,
+    JwtValidation::class,
+    TenantResolver::class,
 ])->group(function () {
     // API v1 routes
     Route::prefix('v1')->group(function () {

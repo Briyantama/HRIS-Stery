@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { isManager, user } from '$lib/stores/auth';
+	import { isManager } from '$lib/stores/auth';
 	import { useLeaveRequests, useApproveLeave, useRejectLeave } from '$lib/queries/leave';
-	import { RejectLeaveFormSchema, type RejectLeaveForm } from '$lib/schemas/leave';
-	import { getErrorMessage, getValidationErrors, type ApiCallError } from '$lib/api/client';
+	import { RejectLeaveFormSchema } from '$lib/schemas/leave';
+	import { getErrorMessage } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import {
 		Dialog,
 		DialogContent,
@@ -15,12 +15,6 @@
 		DialogFooter
 	} from '$lib/components/ui/dialog';
 	import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-svelte';
-
-	// Get current user
-	let userId: string | null = null;
-	user.subscribe((u) => {
-		userId = u?.user_id ?? null;
-	});
 
 	// Mutations
 	const approveLeave = useApproveLeave();
@@ -227,13 +221,13 @@
 		<!-- Loading State -->
 		{#if $leaveRequests.isLoading}
 			<div class="space-y-4">
-				{#each Array(3) as _}
+				{#each [0, 1, 2] as i (i)}
 					<Card>
 						<CardContent class="py-6">
 							<div class="space-y-3">
-								<div class="h-4 w-32 rounded bg-gray-200" />
-								<div class="h-3 w-48 rounded bg-gray-100" />
-								<div class="h-3 w-40 rounded bg-gray-100" />
+								<div class="h-4 w-32 rounded bg-gray-200"></div>
+								<div class="h-3 w-48 rounded bg-gray-100"></div>
+								<div class="h-3 w-40 rounded bg-gray-100"></div>
 							</div>
 						</CardContent>
 					</Card>
@@ -322,7 +316,7 @@
 										<Button
 											size="sm"
 											variant="default"
-											on:click={() => handleApprove(leave.id)}
+											onclick={() => handleApprove(leave.id)}
 											disabled={$approveLeave.isPending}
 											class="flex-1"
 										>
@@ -334,7 +328,7 @@
 										<Button
 											size="sm"
 											variant="destructive"
-											on:click={() => openRejectModal(leave.id)}
+											onclick={() => openRejectModal(leave.id)}
 											disabled={$rejectLeave.isPending}
 										>
 											{#if $rejectLeave.isPending}
@@ -386,8 +380,9 @@
 
 				<!-- Rejection Reason Textarea -->
 				<div class="space-y-2">
-					<label class="text-sm font-medium text-gray-900">Rejection Reason *</label>
+					<label for="reject-reason" class="text-sm font-medium text-gray-900">Rejection Reason *</label>
 					<Textarea
+						id="reject-reason"
 						placeholder="Explain why you are rejecting this leave request..."
 						bind:value={rejectReason}
 						disabled={$rejectLeave.isPending}
@@ -402,14 +397,14 @@
 			<DialogFooter>
 				<Button
 					variant="outline"
-					on:click={() => (showRejectModal = false)}
+					onclick={() => (showRejectModal = false)}
 					disabled={$rejectLeave.isPending}
 				>
 					Cancel
 				</Button>
 				<Button
 					variant="destructive"
-					on:click={handleRejectSubmit}
+					onclick={handleRejectSubmit}
 					disabled={!rejectReason.trim() || $rejectLeave.isPending}
 				>
 					{#if $rejectLeave.isPending}
@@ -424,8 +419,3 @@
 	</Dialog>
 {/if}
 
-<style>
-	:global(body) {
-		/* Ensure consistent spacing */
-	}
-</style>

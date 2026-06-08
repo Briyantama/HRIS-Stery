@@ -3,7 +3,7 @@
 	import { user } from '$lib/stores/auth';
 	import { useLeaveTypes, useApplyLeave } from '$lib/queries/leave';
 	import { ApplyLeaveRequestSchema, type ApplyLeaveForm } from '$lib/schemas/leave';
-	import { getErrorMessage, getValidationErrors, type ApiCallError } from '$lib/api/client';
+	import { getErrorMessage, getValidationErrors } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -163,7 +163,7 @@
 	 * Check if form is valid for submission
 	 */
 	function isFormValid(): boolean {
-		return (
+		return !!(
 			formData.employee_id &&
 			formData.leave_type_id &&
 			formData.start_date &&
@@ -220,13 +220,16 @@
 					<Label for="leave-type">Leave Type *</Label>
 
 					{#if $leaveTypes.isLoading}
-						<div class="h-10 rounded-lg border border-gray-300 bg-gray-50" />
+						<div class="h-10 rounded-lg border border-gray-300 bg-gray-50"></div>
 					{:else if $leaveTypes.isError}
 						<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
 							Failed to load leave types: {$leaveTypes.error?.message || 'Unknown error'}
 						</div>
 					{:else}
-						<Select value={formData.leave_type_id} onValueChange={(v) => (formData.leave_type_id = v)}>
+						<Select
+							value={formData.leave_type_id}
+							onValueChange={(v: string) => (formData.leave_type_id = v)}
+						>
 							<SelectTrigger id="leave-type" class={hasError('leave_type_id') ? 'border-red-500' : ''}>
 								<SelectValue placeholder="Select a leave type..." />
 							</SelectTrigger>
@@ -252,7 +255,7 @@
 							id="start-date"
 							type="date"
 							bind:value={formData.start_date}
-							on:change={() => handleFieldChange('start_date')}
+							onchange={() => handleFieldChange('start_date')}
 							disabled={$applyLeave.isPending}
 							class={hasError('start_date') ? 'border-red-500' : ''}
 						/>
@@ -268,7 +271,7 @@
 							id="end-date"
 							type="date"
 							bind:value={formData.end_date}
-							on:change={() => handleFieldChange('end_date')}
+							onchange={() => handleFieldChange('end_date')}
 							disabled={$applyLeave.isPending}
 							class={hasError('end_date') ? 'border-red-500' : ''}
 						/>
@@ -324,7 +327,7 @@
 					<Button
 						type="button"
 						variant="outline"
-						on:click={() => goto('/dashboard')}
+						onclick={() => goto('/dashboard')}
 						disabled={$applyLeave.isPending}
 					>
 						Cancel

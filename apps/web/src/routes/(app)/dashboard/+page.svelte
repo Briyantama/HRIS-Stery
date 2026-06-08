@@ -13,16 +13,6 @@
 	// Fetch leave balance
 	$: leaveBalance = useLeaveBalance(userId);
 
-	// Format date for display
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	}
-
 	// Get badge color based on remaining days
 	function getRemainingDaysColor(remaining: number, entitled: number): string {
 		const percentage = (remaining / entitled) * 100;
@@ -42,7 +32,7 @@
 	<!-- Loading State -->
 	{#if $leaveBalance.isLoading}
 		<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-			{#each Array(4) as _}
+			{#each [0, 1, 2, 3] as i (i)}
 				<Card>
 					<CardHeader class="pb-2">
 						<Skeleton class="h-4 w-24" />
@@ -123,7 +113,7 @@
 										style="width: {((typeBalance.used_days + typeBalance.pending_days) /
 											typeBalance.entitled_days) *
 											100}%"
-									/>
+									></div>
 								</div>
 								<p class="text-right text-xs text-gray-500">
 									{typeBalance.used_days + typeBalance.pending_days} / {typeBalance.entitled_days}
@@ -144,15 +134,18 @@
 			<p class="text-sm font-medium text-gray-700">Legend</p>
 			<div class="mt-3 space-y-2 text-sm text-gray-600">
 				<div class="flex items-center gap-2">
-					<span class="inline-block h-3 w-3 rounded bg-blue-500" />
+					<span class="inline-block h-3 w-3 rounded bg-blue-500"></span>
 					<span><strong>Used Days:</strong> Already taken leave</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="inline-block h-3 w-3 rounded bg-yellow-400" />
+					<span class="inline-block h-3 w-3 rounded bg-yellow-400"></span>
 					<span><strong>Pending:</strong> Approved requests awaiting start date</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="inline-block h-3 w-3 rounded" style="background-color: #f0f0f0; border: 1px solid #d0d0d0;" />
+					<span
+						class="inline-block h-3 w-3 rounded"
+						style="background-color: #f0f0f0; border: 1px solid #d0d0d0;"
+					></span>
 					<span><strong>Remaining:</strong> Available days to use</span>
 				</div>
 			</div>
@@ -160,8 +153,3 @@
 	{/if}
 </div>
 
-<style>
-	:global(body) {
-		/* Ensure consistent spacing */
-	}
-</style>

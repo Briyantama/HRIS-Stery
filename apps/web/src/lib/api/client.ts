@@ -1,4 +1,4 @@
-import { auth, isAuthenticated } from '$lib/stores/auth';
+import { auth } from '$lib/stores/auth';
 import { goto } from '$app/navigation';
 import type { ApiError } from '$lib/schemas/leave';
 
@@ -64,18 +64,15 @@ export async function apiCall<T = unknown>(
 		}
 	}
 
-	// Prepare headers
-	const headers: HeadersInit = {
+	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		...options.headers
+		...(options.headers as Record<string, string> | undefined)
 	};
 
-	// Inject authorization token
 	if (currentToken) {
 		headers['Authorization'] = `Bearer ${currentToken}`;
 	}
 
-	// Generate request ID for tracing
 	headers['X-Request-ID'] = generateRequestId();
 
 	// Make request
@@ -98,7 +95,7 @@ export async function apiCall<T = unknown>(
 	let data: ApiResponse<T>;
 	try {
 		data = await response.json();
-	} catch (e) {
+	} catch {
 		// Response is not JSON
 		throw new ApiCallError(
 			response.status === 500 ? 'INTERNAL' : 'UNKNOWN',

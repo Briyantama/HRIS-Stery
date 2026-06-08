@@ -236,24 +236,8 @@ func (r *UserRepository) SetRoles(ctx context.Context, tenantID domain.TenantID,
 			return nil
 		}
 
-		// Build multi-row INSERT: (user_id, role_id, granted_at) VALUES ($1, $2, NOW()), ($3, $4, NOW()), ...
 		query := `INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES `
-		args := make([]interface{}, 0, len(roleIDs)*2)
-
-		for i, roleID := range roleIDs {
-			if i > 0 {
-				query += `, `
-			}
-			// Each role uses the same user_id, then its own roleID, then NOW()
-			argIdx := i*2 + 1
-			query += fmt.Sprintf(`($%d, $%d, NOW())`, 1, argIdx+1)
-			args = append(args, userID.String())
-			args = append(args, roleID.String())
-		}
-
-		// Deduplicate args: user_id appears in every row, so we only need it once
-		query = `INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES `
-		args = make([]interface{}, 0, len(roleIDs)+1)
+		args := make([]interface{}, 0, len(roleIDs)+1)
 		args = append(args, userID.String())
 
 		for i, roleID := range roleIDs {
