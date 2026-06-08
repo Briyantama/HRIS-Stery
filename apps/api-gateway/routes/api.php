@@ -18,10 +18,10 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes (no JWT validation required)
 Route::prefix('auth')->group(function () {
-    // Auth routes will be implemented in AuthController
-    // Route::post('login', [AuthController::class, 'login']);
-    // Route::post('register', [AuthController::class, 'register']);
-    // Route::post('refresh', [AuthController::class, 'refresh']);
+    Route::post('login', [\App\Http\Controllers\Api\V1\AuthController::class, 'login'])
+        ->name('auth.login');
+    Route::post('refresh', [\App\Http\Controllers\Api\V1\AuthController::class, 'refresh'])
+        ->name('auth.refresh');
 });
 
 // Health check endpoint (no authentication required)
@@ -39,6 +39,12 @@ Route::middleware([
     JwtValidation::class,
     TenantResolver::class,
 ])->group(function () {
+    // Auth routes (protected)
+    Route::prefix('auth')->group(function () {
+        Route::post('logout', [\App\Http\Controllers\Api\V1\AuthController::class, 'logout'])
+            ->name('auth.logout');
+    });
+
     // API v1 routes
     Route::prefix('v1')->group(function () {
         /*

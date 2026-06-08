@@ -81,10 +81,25 @@ func (c *OperationsConsumer) handleMessage(ctx context.Context, msg *nats.Msg) {
 		resourceType = domain.ResourceType("ATTENDANCE")
 		description = "Attendance corrected"
 
-	case "hris.operations.leave.approval_changed":
-		action = domain.AuditAction("LEAVE_APPROVAL_CHANGED")
+	case "hris.operations.leave.requested":
+		action = domain.AuditAction("LEAVE_REQUESTED")
 		resourceType = domain.ResourceLeave
-		description = "Leave approval changed"
+		description = "Leave request created"
+
+	case "hris.operations.leave.approved":
+		action = domain.AuditAction("LEAVE_APPROVED")
+		resourceType = domain.ResourceLeave
+		description = "Leave request approved"
+
+	case "hris.operations.leave.rejected":
+		action = domain.AuditAction("LEAVE_REJECTED")
+		resourceType = domain.ResourceLeave
+		description = "Leave request rejected"
+
+	case "hris.operations.leave.cancelled":
+		action = domain.AuditAction("LEAVE_CANCELLED")
+		resourceType = domain.ResourceLeave
+		description = "Leave request cancelled"
 
 	default:
 		// Unknown event type, skip
