@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 
 	pb "github.com/hris-stery/hris-stery/gen/go/hris/leave/v1"
+	sharedcfg "github.com/hris-stery/hris-stery/services/_shared/config"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
 	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"github.com/hris-stery/hris-stery/services/_shared/server"
@@ -24,8 +24,25 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
+type serviceConfig struct {
+	App    sharedcfg.AppConfig            `mapstructure:"app"`
+	DB     sharedcfg.DatabaseConfig       `mapstructure:"database"`
+	Server sharedcfg.ServerConfig         `mapstructure:"server"`
+	NATS   sharedcfg.NATSConfig           `mapstructure:"nats"`
+	Otel   sharedcfg.ObservabilityConfig  `mapstructure:"observability"`
+}
+
 func main() {
 	ctx := context.Background()
+
+	// Load configuration from .env and environment variables
+	var cfg serviceConfig
+	sharedcfg.MustLoad(&cfg, sharedcfg.WithDefault("server.grpc_port", "50054"))
+
+	// Validate critical config fields
+	if err := sharedcfg.ValidateAll(&cfg.DB, &cfg.Server, &cfg.NATS); err != nil {
+		log.Fatalf("config validation failed:\n%v", err)
+	}
 
 	logger, _ := zap.NewProduction()
 	defer func() { _ = logger.Sync() }()
@@ -33,20 +50,16 @@ func main() {
 	// Start metrics server
 	observability.StartMetricsServer(logger)
 
-	dbURL := envOr("DATABASE_URL", "postgres://hris_app:hris_app_secret@localhost:6432/hris_db?sslmode=disable")
-	natsURL := envOr("NATS_URL", "nats://localhost:4222")
-	grpcPort := envOr("GRPC_PORT", "50054")
-
 	// Setup PostgreSQL connection pool
-	pool, err := database.SetupPool(ctx, dbURL)
+	pool, err := database.SetupPool(ctx, cfg.DB.URL)
 	if err != nil {
 		log.Fatalf("setup database pool: %v", err)
 	}
 	defer pool.Close()
-	logger.Info("connected to PostgreSQL", zap.Int32("maxConns", 25))
+	logger.Info("connected to PostgreSQL")
 
 	// Setup NATS connection and JetStream
-	natsConn, err := natsgo.Connect(natsURL)
+	natsConn, err := natsgo.Connect(cfg.NATS.URL)
 	if err != nil {
 		log.Fatalf("connect to NATS: %v", err)
 	}
@@ -111,12 +124,12 @@ func main() {
 	logger.Info("gRPC Health service registered")
 
 	// Start listening
-	listener, err := net.Listen("tcp", ":"+grpcPort)
+	listener, err := net.Listen("tcp", ":"+cfg.Server.GRPCPort)
 	if err != nil {
-		log.Fatalf("listen on port %s: %v", grpcPort, err)
+		log.Fatalf("listen on port %s: %v", cfg.Server.GRPCPort, err)
 	}
 
-	logger.Info(fmt.Sprintf("starting gRPC server on port %s", grpcPort))
+	logger.Info(fmt.Sprintf("starting gRPC server on port %s", cfg.Server.GRPCPort))
 
 	// Start gRPC server in goroutine
 	go func() {
@@ -132,13 +145,6 @@ func main() {
 
 	// Wait for shutdown signal
 	shutdown.WaitForShutdown()
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // noopEmployeeValidator is a temporary no-op implementation.
