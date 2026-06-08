@@ -9,6 +9,7 @@ import (
 
 	employeev1 "github.com/hris-stery/hris-stery/gen/go/hris/employee/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/employee-service/internal/application/queries"
@@ -27,6 +28,9 @@ func main() {
 
 	logger, _ := zap.NewProduction()
 	defer func() { _ = logger.Sync() }()
+
+	// Start metrics server
+	observability.StartMetricsServer(logger)
 
 	dbURL := envOr("DATABASE_URL", "postgres://hris_app:hris_app_secret@localhost:6432/hris_db?sslmode=disable")
 	natsURL := envOr("NATS_URL", "nats://localhost:4222")
@@ -77,7 +81,7 @@ func main() {
 	defer consumer.Close()
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
+	grpcServer := grpc.NewServer(server.ServerOptionsWithLogging(logger)...)
 	employeeService := grpchandlers.NewEmployeeServiceServer(
 		createEmployeeHandler,
 		terminateEmployeeHandler,

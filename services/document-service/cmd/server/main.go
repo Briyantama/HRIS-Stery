@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/hris-stery/hris-stery/gen/go/hris/document/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/document-service/internal/application/queries"
@@ -29,6 +30,9 @@ func main() {
 	defer func() {
 		_ = logger.Sync()
 	}()
+
+	// Start metrics server
+	observability.StartMetricsServer(logger)
 
 	// Read configuration from environment
 	dbURL := os.Getenv("DATABASE_URL")
@@ -93,7 +97,7 @@ func main() {
 	metadataHandler := queries.NewGetDocumentMetadataHandler(docRepo, versionRepo, logger)
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
+	grpcServer := grpc.NewServer(server.ServerOptionsWithLogging(logger)...)
 
 	// Register Document Service
 	documentServer := grpchandlers.NewDocumentServiceServer(

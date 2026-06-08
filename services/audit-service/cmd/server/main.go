@@ -9,6 +9,7 @@ import (
 
 	auditv1 "github.com/hris-stery/hris-stery/gen/go/hris/audit/v1"
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/hris-stery/hris-stery/services/audit-service/internal/application/commands"
 	"github.com/hris-stery/hris-stery/services/audit-service/internal/application/queries"
@@ -27,6 +28,9 @@ func main() {
 
 	logger, _ := zap.NewProduction()
 	defer func() { _ = logger.Sync() }()
+
+	// Start metrics server
+	observability.StartMetricsServer(logger)
 
 	// Read configuration from environment
 	dbURL := envOr("DATABASE_URL", "postgres://hris_app:hris_app_secret@localhost:6432/hris_db?sslmode=disable")
@@ -100,7 +104,7 @@ func main() {
 	logger.Info("subscribed to notification events")
 
 	// Create gRPC server with options
-	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
+	grpcServer := grpc.NewServer(server.ServerOptionsWithLogging(logger)...)
 
 	// Register audit service
 	auditService := grpchandlers.NewAuditServiceServer(recordHandler, queryHandler, logger)

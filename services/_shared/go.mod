@@ -28,6 +28,7 @@ require (
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/prometheus/client_golang v1.23.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect

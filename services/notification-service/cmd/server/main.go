@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/hris-stery/hris-stery/services/_shared/database"
+	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"github.com/hris-stery/hris-stery/services/_shared/server"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -29,6 +30,9 @@ func main() {
 	// Setup logging
 	logger, _ := zap.NewProduction()
 	defer func() { _ = logger.Sync() }()
+
+	// Start metrics server
+	observability.StartMetricsServer(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -158,7 +162,7 @@ func main() {
 	logger.Info("subscribed to all NATS events")
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer(server.DefaultGRPCServerOptions()...)
+	grpcServer := grpc.NewServer(server.ServerOptionsWithLogging(logger)...)
 	notificationService := grpchandlers.NewNotificationServiceServer(
 		logger,
 		sendHandler,

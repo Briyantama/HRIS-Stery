@@ -1,174 +1,196 @@
 package observability
 
 import (
-	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
-// MetricsRegistry holds all service metrics
+// MetricsRegistry holds Prometheus metrics
 type MetricsRegistry struct {
 	// RPC metrics
-	RPCRequestsTotal   metric.Int64Counter
-	RPCDurationSeconds metric.Float64Histogram
+	rpcRequestsTotal   prometheus.Counter
+	rpcDurationSeconds prometheus.Histogram
+	rpcErrorsTotal     prometheus.Counter
 
 	// Database metrics
-	DBQueryDuration metric.Float64Histogram
+	dbQueryDurationMs prometheus.Histogram
+	dbErrorsTotal     prometheus.Counter
 
 	// NATS metrics
-	NATSMessagesPublished metric.Int64Counter
-	NATSMessagesConsumed  metric.Int64Counter
-
-	// Email metrics
-	SMTPSendDuration metric.Float64Histogram
-
-	logger *zap.Logger
+	natsMessagesPublished prometheus.Counter
+	natsMessagesConsumed  prometheus.Counter
+	natsErrorsTotal       prometheus.Counter
 }
 
-// InitMetrics initializes all metrics
-func InitMetrics(ctx context.Context, logger *zap.Logger) (*MetricsRegistry, error) {
-	meter := otel.Meter("hris-stery")
-
-	// RPC request counter
-	rpcTotal, err := meter.Int64Counter("rpc_requests_total",
-		metric.WithDescription("Total RPC requests"),
-		metric.WithUnit("{requests}"),
-	)
-	if err != nil {
-		logger.Warn("failed to create rpc_requests_total metric", zap.Error(err))
+// NewMetricsRegistry initializes a new metrics registry
+func NewMetricsRegistry(serviceName string) (*MetricsRegistry, error) {
+	m := &MetricsRegistry{
+		rpcRequestsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "grpc",
+			Name:      "requests_total",
+			Help:      "Total number of RPC requests",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		rpcDurationSeconds: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: "hris",
+			Subsystem: "grpc",
+			Name:      "duration_seconds",
+			Help:      "RPC request duration in seconds",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0},
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		rpcErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "grpc",
+			Name:      "errors_total",
+			Help:      "Total number of RPC errors",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		dbQueryDurationMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: "hris",
+			Subsystem: "db",
+			Name:      "query_duration_ms",
+			Help:      "Database query duration in milliseconds",
+			Buckets:   []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500},
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		dbErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "db",
+			Name:      "errors_total",
+			Help:      "Total number of database errors",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		natsMessagesPublished: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "nats",
+			Name:      "messages_published_total",
+			Help:      "Total number of NATS messages published",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		natsMessagesConsumed: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "nats",
+			Name:      "messages_consumed_total",
+			Help:      "Total number of NATS messages consumed",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
+		natsErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "hris",
+			Subsystem: "nats",
+			Name:      "errors_total",
+			Help:      "Total number of NATS errors",
+			ConstLabels: prometheus.Labels{
+				"service": serviceName,
+			},
+		}),
 	}
 
-	// RPC duration histogram
-	rpcDuration, err := meter.Float64Histogram("rpc_duration_seconds",
-		metric.WithDescription("RPC request duration in seconds"),
-		metric.WithUnit("s"),
-	)
-	if err != nil {
-		logger.Warn("failed to create rpc_duration_seconds metric", zap.Error(err))
+	// Register metrics with default registry
+	if err := prometheus.Register(m.rpcRequestsTotal); err != nil {
+		return nil, fmt.Errorf("register rpcRequestsTotal: %w", err)
+	}
+	if err := prometheus.Register(m.rpcDurationSeconds); err != nil {
+		return nil, fmt.Errorf("register rpcDurationSeconds: %w", err)
+	}
+	if err := prometheus.Register(m.rpcErrorsTotal); err != nil {
+		return nil, fmt.Errorf("register rpcErrorsTotal: %w", err)
+	}
+	if err := prometheus.Register(m.dbQueryDurationMs); err != nil {
+		return nil, fmt.Errorf("register dbQueryDurationMs: %w", err)
+	}
+	if err := prometheus.Register(m.dbErrorsTotal); err != nil {
+		return nil, fmt.Errorf("register dbErrorsTotal: %w", err)
+	}
+	if err := prometheus.Register(m.natsMessagesPublished); err != nil {
+		return nil, fmt.Errorf("register natsMessagesPublished: %w", err)
+	}
+	if err := prometheus.Register(m.natsMessagesConsumed); err != nil {
+		return nil, fmt.Errorf("register natsMessagesConsumed: %w", err)
+	}
+	if err := prometheus.Register(m.natsErrorsTotal); err != nil {
+		return nil, fmt.Errorf("register natsErrorsTotal: %w", err)
 	}
 
-	// DB query duration histogram
-	dbDuration, err := meter.Float64Histogram("db_query_duration_seconds",
-		metric.WithDescription("Database query duration in seconds"),
-		metric.WithUnit("s"),
-	)
-	if err != nil {
-		logger.Warn("failed to create db_query_duration_seconds metric", zap.Error(err))
-	}
-
-	// NATS published counter
-	natsPublished, err := meter.Int64Counter("nats_messages_published_total",
-		metric.WithDescription("Total NATS messages published"),
-		metric.WithUnit("{messages}"),
-	)
-	if err != nil {
-		logger.Warn("failed to create nats_messages_published_total metric", zap.Error(err))
-	}
-
-	// NATS consumed counter
-	natsConsumed, err := meter.Int64Counter("nats_messages_consumed_total",
-		metric.WithDescription("Total NATS messages consumed"),
-		metric.WithUnit("{messages}"),
-	)
-	if err != nil {
-		logger.Warn("failed to create nats_messages_consumed_total metric", zap.Error(err))
-	}
-
-	// SMTP send duration histogram
-	smtpDuration, err := meter.Float64Histogram("smtp_send_duration_seconds",
-		metric.WithDescription("SMTP email send duration in seconds"),
-		metric.WithUnit("s"),
-	)
-	if err != nil {
-		logger.Warn("failed to create smtp_send_duration_seconds metric", zap.Error(err))
-	}
-
-	logger.Info("Metrics initialized successfully")
-	return &MetricsRegistry{
-		RPCRequestsTotal:      rpcTotal,
-		RPCDurationSeconds:    rpcDuration,
-		DBQueryDuration:       dbDuration,
-		NATSMessagesPublished: natsPublished,
-		NATSMessagesConsumed:  natsConsumed,
-		SMTPSendDuration:      smtpDuration,
-		logger:                logger,
-	}, nil
+	return m, nil
 }
 
-// RecordRPCRequest records an RPC request with attributes
-func (m *MetricsRegistry) RecordRPCRequest(ctx context.Context, endpoint string, sc SpanContext, durationSec float64, success bool) {
-	if m.RPCRequestsTotal == nil || m.RPCDurationSeconds == nil {
-		return
-	}
-
-	attrs := []attribute.KeyValue{
-		attribute.String("endpoint", endpoint),
-		attribute.String(TenantIDKey, sc.TenantID),
-		attribute.Bool("success", success),
-	}
-
-	m.RPCRequestsTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
-	m.RPCDurationSeconds.Record(ctx, durationSec, metric.WithAttributes(attrs...))
+// RecordRPCRequest records an RPC request
+func (m *MetricsRegistry) RecordRPCRequest() {
+	m.rpcRequestsTotal.Inc()
 }
 
-// RecordDBQuery records a database query execution
-func (m *MetricsRegistry) RecordDBQuery(ctx context.Context, operation string, sc SpanContext, durationSec float64, success bool) {
-	if m.DBQueryDuration == nil {
-		return
-	}
-
-	attrs := []attribute.KeyValue{
-		attribute.String("operation", operation),
-		attribute.String(TenantIDKey, sc.TenantID),
-		attribute.Bool("success", success),
-	}
-
-	m.DBQueryDuration.Record(ctx, durationSec, metric.WithAttributes(attrs...))
+// RecordRPCDuration records RPC request duration
+func (m *MetricsRegistry) RecordRPCDuration(duration time.Duration) {
+	m.rpcDurationSeconds.Observe(duration.Seconds())
 }
 
-// RecordNATSPublish records a NATS message publish
-func (m *MetricsRegistry) RecordNATSPublish(ctx context.Context, subject string, sc SpanContext, success bool) {
-	if m.NATSMessagesPublished == nil {
-		return
-	}
-
-	attrs := []attribute.KeyValue{
-		attribute.String("subject", subject),
-		attribute.String(TenantIDKey, sc.TenantID),
-		attribute.Bool("success", success),
-	}
-
-	m.NATSMessagesPublished.Add(ctx, 1, metric.WithAttributes(attrs...))
+// RecordRPCError records an RPC error
+func (m *MetricsRegistry) RecordRPCError() {
+	m.rpcErrorsTotal.Inc()
 }
 
-// RecordNATSConsume records a NATS message consumption
-func (m *MetricsRegistry) RecordNATSConsume(ctx context.Context, subject string, sc SpanContext, durationSec float64, success bool) {
-	if m.NATSMessagesConsumed == nil {
-		return
-	}
-
-	attrs := []attribute.KeyValue{
-		attribute.String("subject", subject),
-		attribute.String(TenantIDKey, sc.TenantID),
-		attribute.Bool("success", success),
-	}
-
-	m.NATSMessagesConsumed.Add(ctx, 1, metric.WithAttributes(attrs...))
+// RecordDBQuery records database query duration
+func (m *MetricsRegistry) RecordDBQuery(duration time.Duration) {
+	m.dbQueryDurationMs.Observe(float64(duration.Milliseconds()))
 }
 
-// RecordSMTPSend records SMTP email sending
-func (m *MetricsRegistry) RecordSMTPSend(ctx context.Context, sc SpanContext, durationSec float64, success bool) {
-	if m.SMTPSendDuration == nil {
-		return
-	}
+// RecordDBError records a database error
+func (m *MetricsRegistry) RecordDBError() {
+	m.dbErrorsTotal.Inc()
+}
 
-	attrs := []attribute.KeyValue{
-		attribute.String(TenantIDKey, sc.TenantID),
-		attribute.Bool("success", success),
-	}
+// RecordNATSMessagePublished records a published NATS message
+func (m *MetricsRegistry) RecordNATSMessagePublished() {
+	m.natsMessagesPublished.Inc()
+}
 
-	m.SMTPSendDuration.Record(ctx, durationSec, metric.WithAttributes(attrs...))
+// RecordNATSMessageConsumed records a consumed NATS message
+func (m *MetricsRegistry) RecordNATSMessageConsumed() {
+	m.natsMessagesConsumed.Inc()
+}
+
+// RecordNATSError records a NATS error
+func (m *MetricsRegistry) RecordNATSError() {
+	m.natsErrorsTotal.Inc()
+}
+
+// StartMetricsServer starts the Prometheus metrics HTTP server on port 8081
+func StartMetricsServer(logger *zap.Logger) {
+	http.Handle("/metrics", promhttp.Handler())
+
+	go func() {
+		listener, err := net.Listen("tcp", ":8081")
+		if err != nil {
+			logger.Error("failed to listen on metrics port", zap.Error(err))
+			return
+		}
+		defer listener.Close()
+
+		logger.Info("starting metrics server", zap.String("address", "0.0.0.0:8081"))
+		if err := http.Serve(listener, nil); err != nil {
+			logger.Error("metrics server error", zap.Error(err))
+		}
+	}()
 }
