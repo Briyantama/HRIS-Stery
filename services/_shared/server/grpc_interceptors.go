@@ -4,11 +4,47 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hris-stery/hris-stery/services/_shared/observability"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
+
+// UnaryServerRequestIDInterceptor generates request_id for tracing if not present
+func UnaryServerRequestIDInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		requestID := observability.RequestIDFromContext(ctx)
+		if requestID == "" {
+			requestID = uuid.New().String()
+			ctx = context.WithValue(ctx, "request_id", requestID)
+		}
+		return handler(ctx, req)
+	}
+}
+
+// StreamServerRequestIDInterceptor generates request_id for tracing if not present
+func StreamServerRequestIDInterceptor() grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		ctx := ss.Context()
+		requestID := observability.RequestIDFromContext(ctx)
+		if requestID == "" {
+			requestID = uuid.New().String()
+			ctx = context.WithValue(ctx, "request_id", requestID)
+		}
+		return handler(srv, &wrappedStream{ServerStream: ss, ctx: ctx})
+	}
+}
+
+// wrappedStream wraps grpc.ServerStream to replace its context
+type wrappedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedStream) Context() context.Context {
+	return w.ctx
+}
 
 // UnaryServerLoggingInterceptor logs entry and exit of unary RPC calls
 func UnaryServerLoggingInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
@@ -77,12 +113,19 @@ func StreamServerLoggingInterceptor(logger *zap.Logger) grpc.StreamServerInterce
 	}
 }
 
-// ServerOptionsWithLogging returns gRPC server options with logging interceptors
+// ServerOptionsWithLogging returns gRPC server options with request tracing and logging
 func ServerOptionsWithLogging(logger *zap.Logger) []grpc.ServerOption {
 	opts := DefaultGRPCServerOptions()
 	opts = append(opts,
-		grpc.UnaryInterceptor(UnaryServerLoggingInterceptor(logger)),
-		grpc.StreamInterceptor(StreamServerLoggingInterceptor(logger)),
+		// Request ID generation (outermost to catch all requests)
+		grpc.ChainUnaryInterceptor(
+			UnaryServerRequestIDInterceptor(),
+			UnaryServerLoggingInterceptor(logger),
+		),
+		grpc.ChainStreamInterceptor(
+			StreamServerRequestIDInterceptor(),
+			StreamServerLoggingInterceptor(logger),
+		),
 	)
 	return opts
 }

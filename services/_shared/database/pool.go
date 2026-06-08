@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,14 +31,40 @@ func DefaultPoolConfig() PoolConfig {
 	}
 }
 
+// PoolConfigForEnvironment returns environment-specific pool configuration.
+// Development: smaller pools, longer idle timeout
+// Production: larger pools, aggressive idle cleanup, frequent health checks
+func PoolConfigForEnvironment() PoolConfig {
+	env := os.Getenv("APP_ENV")
+	if env == "production" {
+		return PoolConfig{
+			MaxConns:          50,              // Production scale: support 4000+ concurrent users
+			MinConns:          10,              // More warm connections in production
+			MaxConnLifetime:   10 * time.Minute, // Shorter lifetime to prevent stale connections
+			MaxConnIdleTime:   2 * time.Minute,  // Aggressive idle cleanup
+			HealthCheckPeriod: 30 * time.Second, // Frequent health checks in production
+		}
+	}
+	// Default to development settings
+	return PoolConfig{
+		MaxConns:          10,              // Development: smaller pool
+		MinConns:          2,               // Fewer warm connections in dev
+		MaxConnLifetime:   30 * time.Minute, // Longer lifetime acceptable in dev
+		MaxConnIdleTime:   10 * time.Minute, // Less aggressive cleanup in dev
+		HealthCheckPeriod: 5 * time.Minute,  // Less frequent health checks in dev
+	}
+}
+
 // SetupPool creates a PostgreSQL connection pool with production-grade configuration.
 // This replaces the default pgxpool settings which only create 4 connections.
+// Uses environment-aware settings (APP_ENV=production for production config).
 //
 // Why this matters:
-// - Default: 4 connections → exhaustion at ~200 RPS
-// - Configured: 25 connections → supports 2000+ RPS
+// - Default pgxpool: 4 connections → exhaustion at ~200 RPS
+// - Development: 10 connections → supports 800+ RPS
+// - Production: 50 connections → supports 4000+ RPS
 func SetupPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	return SetupPoolWithConfig(ctx, dbURL, DefaultPoolConfig())
+	return SetupPoolWithConfig(ctx, dbURL, PoolConfigForEnvironment())
 }
 
 // SetupPoolWithConfig creates a PostgreSQL connection pool with custom configuration.
