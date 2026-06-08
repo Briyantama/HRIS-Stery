@@ -25,11 +25,11 @@ import (
 )
 
 type serviceConfig struct {
-	App    sharedcfg.AppConfig            `mapstructure:"app"`
-	DB     sharedcfg.DatabaseConfig       `mapstructure:"database"`
-	Server sharedcfg.ServerConfig         `mapstructure:"server"`
-	NATS   sharedcfg.NATSConfig           `mapstructure:"nats"`
-	Otel   sharedcfg.ObservabilityConfig  `mapstructure:"observability"`
+	App    sharedcfg.AppConfig           `mapstructure:"app"`
+	DB     sharedcfg.DatabaseConfig      `mapstructure:"database"`
+	Server sharedcfg.ServerConfig        `mapstructure:"server"`
+	NATS   sharedcfg.NATSConfig          `mapstructure:"nats"`
+	Otel   sharedcfg.ObservabilityConfig `mapstructure:"observability"`
 }
 
 func main() {

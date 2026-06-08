@@ -52,27 +52,29 @@ Route::middleware([
         |
         */
         Route::prefix('leaves')->group(function () {
-            // Apply for new leave
+            // Apply for new leave (all authenticated users)
             Route::post('/', [LeaveController::class, 'applyLeave'])
                 ->name('leaves.apply');
 
-            // List leave requests with optional filters
+            // List leave requests with optional filters (all authenticated users)
             Route::get('/', [LeaveController::class, 'listLeaveRequests'])
                 ->name('leaves.list');
 
-            // Get single leave request by ID
+            // Get single leave request by ID (all authenticated users)
             Route::get('{id}', [LeaveController::class, 'getLeaveRequest'])
                 ->name('leaves.show');
 
-            // Approve leave request (manager-only)
+            // Approve leave request (manager-only - RBAC protected)
             Route::post('{id}/approve', [LeaveController::class, 'approveLeave'])
+                ->middleware('role:manager,hr_admin')
                 ->name('leaves.approve');
 
-            // Reject leave request (manager-only)
+            // Reject leave request (manager-only - RBAC protected)
             Route::post('{id}/reject', [LeaveController::class, 'rejectLeave'])
+                ->middleware('role:manager,hr_admin')
                 ->name('leaves.reject');
 
-            // Cancel leave request
+            // Cancel leave request (all authenticated users - backend validates ownership)
             Route::post('{id}/cancel', [LeaveController::class, 'cancelLeave'])
                 ->name('leaves.cancel');
         });

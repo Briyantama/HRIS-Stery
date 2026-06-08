@@ -24,6 +24,7 @@ abstract class BaseGrpcGatewayClient
     protected string $serviceUrl;
     protected string $tenantId;
     protected string $userId;
+    protected array $userRoles;
     protected string $requestId;
 
     /**
@@ -40,6 +41,10 @@ abstract class BaseGrpcGatewayClient
         // Extract tenant_id and user_id from request (set by middleware)
         $this->tenantId = $request->attributes->get('tenant_id', '');
         $this->userId = $request->attributes->get('user_id', '');
+
+        // Extract user roles from JWT claims (set by JwtValidation middleware)
+        $user = $request->attributes->get('user');
+        $this->userRoles = $user?->roles ?? [];
 
         // Generate or retrieve request_id for distributed tracing
         $this->requestId = $request->header('x-request-id') ?? $this->generateRequestId();
@@ -94,7 +99,7 @@ abstract class BaseGrpcGatewayClient
     /**
      * Build HTTP headers for outbound gRPC calls.
      *
-     * Includes metadata for tracing and multi-tenancy.
+     * Includes metadata for tracing, multi-tenancy, and RBAC authorization.
      */
     private function buildHeaders(): array
     {
@@ -103,6 +108,7 @@ abstract class BaseGrpcGatewayClient
             'Accept' => 'application/json',
             'x-tenant-id' => $this->tenantId,
             'x-user-id' => $this->userId,
+            'x-user-roles' => implode(',', $this->userRoles),
             'x-request-id' => $this->requestId,
             'Authorization' => $this->getBearerToken(),
         ];

@@ -19,15 +19,15 @@ import (
 // LeaveServiceServer implements the gRPC Leave service.
 type LeaveServiceServer struct {
 	pb.UnimplementedLeaveServiceServer
-	logger                        *zap.Logger
-	createLeaveRequestHandler     *commands.CreateLeaveRequestHandler
-	approveLeaveRequestHandler    *commands.ApproveLeaveRequestHandler
-	rejectLeaveRequestHandler     *commands.RejectLeaveRequestHandler
-	cancelLeaveRequestHandler     *commands.CancelLeaveRequestHandler
-	getLeaveRequestHandler        *queries.GetLeaveRequestHandler
-	listLeaveRequestsHandler      *queries.ListLeaveRequestsHandler
-	getLeaveBalanceHandler        *queries.GetLeaveBalanceHandler
-	listLeaveTypesHandler         *queries.ListLeaveTypesHandler
+	logger                     *zap.Logger
+	createLeaveRequestHandler  *commands.CreateLeaveRequestHandler
+	approveLeaveRequestHandler *commands.ApproveLeaveRequestHandler
+	rejectLeaveRequestHandler  *commands.RejectLeaveRequestHandler
+	cancelLeaveRequestHandler  *commands.CancelLeaveRequestHandler
+	getLeaveRequestHandler     *queries.GetLeaveRequestHandler
+	listLeaveRequestsHandler   *queries.ListLeaveRequestsHandler
+	getLeaveBalanceHandler     *queries.GetLeaveBalanceHandler
+	listLeaveTypesHandler      *queries.ListLeaveTypesHandler
 }
 
 // NewLeaveServiceServer creates a new gRPC Leave service server.
@@ -216,9 +216,9 @@ func (s *LeaveServiceServer) ListLeaveRequests(ctx context.Context, req *pb.List
 	}
 
 	return &pb.ListLeaveRequestsResponse{
-		LeaveRequests:  leaves,
-		TotalCount:     int32(result.Total),
-		NextPageToken:  "",
+		LeaveRequests: leaves,
+		TotalCount:    int32(result.Total),
+		NextPageToken: "",
 	}, nil
 }
 
@@ -238,6 +238,11 @@ func (s *LeaveServiceServer) ApproveLeave(ctx context.Context, req *pb.ApproveLe
 
 	if req.TenantId != "" && req.TenantId != tenantID {
 		return nil, status.Error(codes.PermissionDenied, "tenant_id mismatch")
+	}
+
+	// Fine-grained RBAC: only managers and hr_admins can approve leave
+	if err := requireApprovalPermission(ctx); err != nil {
+		return nil, err
 	}
 
 	actorID := observability.UserIDFromContext(ctx)
@@ -296,6 +301,11 @@ func (s *LeaveServiceServer) RejectLeave(ctx context.Context, req *pb.RejectLeav
 		return nil, status.Error(codes.PermissionDenied, "tenant_id mismatch")
 	}
 
+	// Fine-grained RBAC: only managers and hr_admins can reject leave
+	if err := requireApprovalPermission(ctx); err != nil {
+		return nil, err
+	}
+
 	actorID := observability.UserIDFromContext(ctx)
 	if actorID == "" {
 		actorID = req.ApproverId
@@ -350,6 +360,23 @@ func (s *LeaveServiceServer) CancelLeave(ctx context.Context, req *pb.CancelLeav
 
 	if req.TenantId != "" && req.TenantId != tenantID {
 		return nil, status.Error(codes.PermissionDenied, "tenant_id mismatch")
+	}
+
+	// Fetch the leave request early to verify ownership for cancellation
+	leaveReqDTO, err := s.getLeaveRequestHandler.Handle(ctx, queries.GetLeaveRequestQuery{
+		TenantID:       tenantID,
+		LeaveRequestID: req.Id,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, status.Errorf(codes.NotFound, "leave request not found")
+		}
+		return nil, status.Errorf(codes.Internal, "fetch leave request: %v", err)
+	}
+
+	// Fine-grained RBAC: employees can only cancel their own leave, admins can cancel any
+	if err := verifyCancelPermission(ctx, leaveReqDTO.EmployeeID); err != nil {
+		return nil, err
 	}
 
 	actorID := observability.UserIDFromContext(ctx)
