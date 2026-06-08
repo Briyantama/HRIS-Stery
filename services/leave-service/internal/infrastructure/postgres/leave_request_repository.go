@@ -335,14 +335,17 @@ func (r *LeaveRequestRepository) CreateAndUpdateBalanceAtomically(
 	ctx context.Context,
 	request *domain.LeaveRequest,
 	balance *domain.LeaveBalance,
-	balanceRepo *LeaveBalanceRepository,
+	balanceRepo domain.LeaveBalanceRepository,
 ) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
 		if err := r.CreateWithTx(ctx, tx, request); err != nil {
 			return fmt.Errorf("create leave request: %w", err)
 		}
-		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
-			return fmt.Errorf("update balance: %w", err)
+		// Cast to concrete type to access updateWithTx method
+		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
+			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
+				return fmt.Errorf("update balance: %w", err)
+			}
 		}
 		return nil
 	})
@@ -387,7 +390,7 @@ func (r *LeaveRequestRepository) ApproveAndUpdateBalanceAtomically(
 	ctx context.Context,
 	request *domain.LeaveRequest,
 	balance *domain.LeaveBalance,
-	balanceRepo *LeaveBalanceRepository,
+	balanceRepo domain.LeaveBalanceRepository,
 ) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
 		// Update request status (approve)
@@ -396,8 +399,10 @@ func (r *LeaveRequestRepository) ApproveAndUpdateBalanceAtomically(
 		}
 
 		// Update balance (pending -> used)
-		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
-			return fmt.Errorf("update balance: %w", err)
+		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
+			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
+				return fmt.Errorf("update balance: %w", err)
+			}
 		}
 
 		return nil
@@ -410,7 +415,7 @@ func (r *LeaveRequestRepository) RejectAndUpdateBalanceAtomically(
 	ctx context.Context,
 	request *domain.LeaveRequest,
 	balance *domain.LeaveBalance,
-	balanceRepo *LeaveBalanceRepository,
+	balanceRepo domain.LeaveBalanceRepository,
 ) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
 		// Update request status (reject)
@@ -419,8 +424,10 @@ func (r *LeaveRequestRepository) RejectAndUpdateBalanceAtomically(
 		}
 
 		// Update balance (remove pending)
-		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
-			return fmt.Errorf("update balance: %w", err)
+		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
+			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
+				return fmt.Errorf("update balance: %w", err)
+			}
 		}
 
 		return nil
@@ -433,7 +440,7 @@ func (r *LeaveRequestRepository) CancelAndUpdateBalanceAtomically(
 	ctx context.Context,
 	request *domain.LeaveRequest,
 	balance *domain.LeaveBalance,
-	balanceRepo *LeaveBalanceRepository,
+	balanceRepo domain.LeaveBalanceRepository,
 ) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(request.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
 		// Update request status (cancel)
@@ -442,8 +449,10 @@ func (r *LeaveRequestRepository) CancelAndUpdateBalanceAtomically(
 		}
 
 		// Update balance (remove used or pending)
-		if err := balanceRepo.updateWithTx(ctx, tx, balance); err != nil {
-			return fmt.Errorf("update balance: %w", err)
+		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
+			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
+				return fmt.Errorf("update balance: %w", err)
+			}
 		}
 
 		return nil
