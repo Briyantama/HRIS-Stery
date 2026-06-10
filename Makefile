@@ -12,7 +12,8 @@ SHELL := bash
         preflight-check check-env diagnose validate-all \
         dev dev-down dev-reset dev-logs dev-ps \
         proto-deps proto-gen proto-lint proto-breaking \
-        migrate-up migrate-down migrate-status migrate-fresh migrate-validate \
+        migrate-up migrate-down migrate-status migrate-fresh migrate-validate migrate-create migrate-list \
+        db-health db-wait db-reset db-info \
         test test-go test-integration test-laravel test-svelte test-e2e \
         lint lint-go lint-laravel lint-svelte \
         build build-go build-laravel build-svelte \
@@ -22,6 +23,7 @@ SHELL := bash
         all-go all-laravel all-svelte all-apps \
         require-laravel-vendor require-svelte-modules \
         tidy vet clean clean-go clean-laravel clean-svelte setup setup-apps \
+        sqlc-gen sqlc-diff \
         go-services
 
 # ── Discovered paths (only *-service dirs; excludes _shared) ───────────────
@@ -67,9 +69,20 @@ help:
 	@echo "  make proto-breaking   buf breaking vs main (requires git)"
 	@echo ""
 	@echo "Migrations (requires Postgres + migrate CLI):"
-	@echo "  make migrate-up       Apply migrations for: $(MIGRATE_SERVICES)"
-	@echo "  make migrate-down     Roll back one step per service"
+	@echo "  make migrate-create   Create new migration pair (NAME=description SERVICE=auth)"
+	@echo "  make migrate-list     List all migrations per service"
+	@echo "  make migrate-validate Validate all migration files (up/down pairs, naming)"
+	@echo "  make migrate-verify   Alias for migrate-validate"
 	@echo "  make migrate-status   Show migration version per service"
+	@echo "  make migrate-up       Apply all pending migrations"
+	@echo "  make migrate-down     Roll back one step per service"
+	@echo "  make migrate-fresh    ⚠️  Reset and reapply all migrations"
+	@echo ""
+	@echo "Database Management:"
+	@echo "  make db-health        Check database connectivity and schema status"
+	@echo "  make db-wait          Wait for database to become ready (for startup scripts)"
+	@echo "  make db-info          Display database configuration and connection info"
+	@echo "  make db-reset         ⚠️  Drop all schemas and reapply migrations"
 	@echo ""
 	@echo "Go:"
 	@echo "  make tidy             go mod tidy for all Go services + gen/go"
@@ -80,6 +93,8 @@ help:
 	@echo "  make lint-go          golangci-lint (skip if not installed)"
 	@echo "  make format-go        go fmt for all Go services"
 	@echo "  make update-go-mods   update go.mod for all Go services"
+	@echo "  make sqlc-gen         sqlc generate for services with sqlc.yaml"
+	@echo "  make sqlc-diff        verify sqlc output is up to date (CI)"
 	@echo "  make all-go           run all go vet, fmt, and lint commands for all Go services"
 	@echo ""
 	@echo "Laravel API Gateway ($(API_GATEWAY_DIR), skipped if composer.json missing):"
@@ -131,6 +146,7 @@ check-tools:
 	@command -v migrate >/dev/null 2>&1 || echo "WARN: migrate not found (needed for migrate-*)"
 	@command -v docker >/dev/null 2>&1 || echo "WARN: docker not found (needed for dev)"
 	@command -v golangci-lint >/dev/null 2>&1 || echo "WARN: golangci-lint not found (lint-go will skip)"
+	@command -v sqlc >/dev/null 2>&1 || echo "WARN: sqlc not found (needed for sqlc-gen — https://docs.sqlc.dev/en/latest/overview/install.html)"
 	@command -v php >/dev/null 2>&1 || echo "WARN: php not found (needed for Laravel)"
 	@command -v composer >/dev/null 2>&1 || echo "WARN: composer not found (needed for Laravel)"
 	@command -v node >/dev/null 2>&1 || echo "WARN: node not found (needed for SvelteKit)"
@@ -286,6 +302,62 @@ migrate-status: ## Show current migration version for each service
 		echo "  $$svc: $$(migrate -path "services/$$svc/migrations" -database "$(DB_URL)" version 2>/dev/null || echo 'no migrations')"; \
 	done
 
+migrate-create: ## Create a new migration pair (NAME=<desc> SERVICE=<service>)
+	@if [ -z "$(NAME)" ] || [ -z "$(SERVICE)" ]; then \
+		echo "Usage: make migrate-create NAME=<description> SERVICE=<service>"; \
+		echo "Example: make migrate-create NAME=add_user_indexes SERVICE=auth"; \
+		exit 1; \
+	fi
+	@bash scripts/migrate-helper.sh create "$(SERVICE)" "$(NAME)"
+
+migrate-list: ## List all migrations across all services
+	@bash scripts/migrate-helper.sh list
+
+migrate-verify: migrate-validate ## Verify migration integrity (alias for migrate-validate)
+	@bash scripts/migrate-helper.sh verify
+	@bash scripts/migrate-helper.sh rollback-check
+
+# ──────────────────────────────────────────────────────────────
+# Database Management
+# ──────────────────────────────────────────────────────────────
+db-health: ## Check database connectivity, schema status, and migration state
+	@bash scripts/db-health.sh check
+
+db-wait: ## Wait for database to become ready (for startup scripts)
+	@bash scripts/db-health.sh wait
+
+db-info: ## Display database configuration and connection information
+	@echo "Database Configuration:"
+	@echo "  Host:     $${DB_HOST:-localhost}"
+	@echo "  Port:     $${DB_PORT:-5432}"
+	@echo "  Database: $${DB_NAME:-hris_db}"
+	@echo "  User:     $${DB_USER:-hris_admin}"
+	@echo ""
+	@echo "Connection string:"
+	@echo "  postgres://$${DB_USER:-hris_admin}:***@$${DB_HOST:-localhost}:$${DB_PORT:-5432}/$${DB_NAME:-hris_db}"
+	@echo ""
+	@if command -v migrate >/dev/null 2>&1; then \
+		echo "Migration versions:"; \
+		make migrate-status || true; \
+	fi
+
+db-reset: ## ⚠️  DESTRUCTIVE: Drop all schemas and reapply migrations
+	@echo "⚠️  WARNING: This will DELETE all data in the database"
+	@read -p "Type 'yes' to confirm: " response; \
+	if [ "$$response" = "yes" ]; then \
+		echo "Dropping all schemas..."; \
+		if command -v psql >/dev/null 2>&1; then \
+			PGPASSWORD="$(DB_PASSWORD)" psql -h localhost -U hris_admin -d hris_db -c "DROP SCHEMA IF EXISTS auth, employee, attendance, leave, audit, notification, document CASCADE;" 2>/dev/null || true; \
+			PGPASSWORD="$(DB_PASSWORD)" psql -h localhost -U hris_admin -d hris_db -c "DROP TABLE IF EXISTS schema_migrations CASCADE;" 2>/dev/null || true; \
+		fi; \
+		echo "Reapplying migrations..."; \
+		make migrate-up; \
+		echo "✅ Database reset complete"; \
+	else \
+		echo "❌ Reset cancelled"; \
+		exit 1; \
+	fi
+
 # ──────────────────────────────────────────────────────────────
 # Go — loop helpers
 # ──────────────────────────────────────────────────────────────
@@ -316,6 +388,25 @@ update-go-mods:
 
 format-go:
 	$(call go_foreach,go fmt ./...)
+
+# ── SQLC ─────────────────────────────────────────────────────
+sqlc-gen: ## Run sqlc generate for all services that have sqlc.yaml
+	@command -v sqlc >/dev/null 2>&1 || { echo "ERROR: sqlc not installed (https://docs.sqlc.dev/en/latest/overview/install.html)"; exit 1; }
+	@for svc in $(GO_SERVICES); do \
+		if [ -f "services/$$svc/sqlc.yaml" ]; then \
+			echo "→ sqlc generate: $$svc"; \
+			(cd "services/$$svc" && sqlc generate) || exit 1; \
+		fi; \
+	done
+
+sqlc-diff: ## Verify sqlc generated files are up to date (use in CI to catch drift)
+	@command -v sqlc >/dev/null 2>&1 || { echo "ERROR: sqlc not installed (https://docs.sqlc.dev/en/latest/overview/install.html)"; exit 1; }
+	@for svc in $(GO_SERVICES); do \
+		if [ -f "services/$$svc/sqlc.yaml" ]; then \
+			echo "→ sqlc diff: $$svc"; \
+			(cd "services/$$svc" && sqlc diff) || { echo "ERROR: $$svc sqlc output is out of date. Run: make sqlc-gen"; exit 1; }; \
+		fi; \
+	done
 
 # ── Generated code guard ─────────────────────────────────────
 require-proto-gen:
