@@ -9,9 +9,10 @@ SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 .PHONY: help check-tools require-proto-gen \
+        preflight-check check-env diagnose validate-all \
         dev dev-down dev-reset dev-logs dev-ps \
         proto-deps proto-gen proto-lint proto-breaking \
-        migrate-up migrate-down migrate-status \
+        migrate-up migrate-down migrate-status migrate-fresh migrate-validate \
         test test-go test-integration test-laravel test-svelte test-e2e \
         lint lint-go lint-laravel lint-svelte \
         build build-go build-laravel build-svelte \
@@ -46,10 +47,16 @@ help:
 	@echo "Go services (auto-detected): $(GO_SERVICES)"
 	@echo "Migrate services:            $(MIGRATE_SERVICES)"
 	@echo ""
+	@echo "Preflight & Diagnostics:"
+	@echo "  make preflight-check  Validate environment setup (Docker, Go, tools)"
+	@echo "  make check-env        Verify all environment variables"
+	@echo "  make diagnose         Report system state and potential issues"
+	@echo "  make validate-all     Run full validation suite (preflight + migrations)"
+	@echo ""
 	@echo "Dev environment:"
-	@echo "  make dev              Start infrastructure (Docker Compose)"
-	@echo "  make dev-down         Stop infrastructure"
-	@echo "  make dev-reset        Stop and destroy volumes"
+	@echo "  make dev              Start infrastructure with preflight checks"
+	@echo "  make dev-down         Stop infrastructure cleanly"
+	@echo "  make dev-reset        ⚠️  DESTRUCTIVE: Stop and destroy all volumes"
 	@echo "  make dev-logs         Tail container logs"
 	@echo "  make dev-ps           Show container status"
 	@echo ""
@@ -131,10 +138,49 @@ check-tools:
 	@echo "OK: core tools present"
 
 # ──────────────────────────────────────────────────────────────
+# Preflight checks & diagnostics
+# ──────────────────────────────────────────────────────────────
+preflight-check: ## Validate environment setup (Docker, tools, disk space, ports)
+	@if command -v bash >/dev/null 2>&1; then \
+		bash scripts/preflight.sh; \
+	else \
+		powershell -ExecutionPolicy Bypass -File scripts/preflight.ps1; \
+	fi
+
+check-env: ## Verify all required environment variables
+	@echo "Checking environment variables..."
+	@if [ -f ".env.example" ]; then \
+		echo "Required variables (from .env.example):"; \
+		grep -E '^\s*[A-Z_]+=' .env.example | awk -F'=' '{print "  - " $$1}' | head -10; \
+	else \
+		echo "No .env.example found"; \
+	fi
+	@echo "Set missing variables with: export VAR=value"
+
+diagnose: ## Report system state and potential issues
+	@echo ""
+	@echo "System Diagnostics:"
+	@echo "  OS: $$(uname -s)"
+	@echo "  Go: $$(go version 2>/dev/null || echo 'not found')"
+	@echo "  Docker: $$(docker --version 2>/dev/null || echo 'not found')"
+	@echo "  PostgreSQL (running): $$(nc -z localhost 5432 2>/dev/null && echo 'yes' || echo 'no')"
+	@echo "  Redis (running): $$(nc -z localhost 6379 2>/dev/null && echo 'yes' || echo 'no')"
+	@echo "  NATS (running): $$(nc -z localhost 4222 2>/dev/null && echo 'yes' || echo 'no')"
+	@echo "  Containers: $$(docker ps -q 2>/dev/null | wc -l) running"
+	@echo ""
+
+validate-all: preflight-check migrate-validate ## Run full validation (preflight + migrations)
+	@echo "✅ Full validation complete"
+
+# ──────────────────────────────────────────────────────────────
 # Dev environment
 # ──────────────────────────────────────────────────────────────
-dev:
-	$(COMPOSE) up -d
+dev: preflight-check ## Start infrastructure (Docker Compose) with preflight validation
+	@echo "Starting development environment..."
+	@$(COMPOSE) up -d
+	@echo ""
+	@echo "Waiting for services to be healthy..."
+	@bash scripts/wait-for-services.sh || true
 	@echo ""
 	@echo "Infrastructure running:"
 	@echo "  PostgreSQL  → localhost:5432"
@@ -146,18 +192,27 @@ dev:
 	@echo "  Prometheus  → http://localhost:9090"
 	@echo ""
 
-dev-down:
-	$(COMPOSE) down
+dev-down: ## Stop infrastructure cleanly
+	@echo "Stopping development environment..."
+	@$(COMPOSE) down || true
+	@echo "✅ Infrastructure stopped"
 
-dev-reset:
-	$(COMPOSE) down -v
-	@echo "All volumes destroyed."
+dev-reset: ## ⚠️  DESTRUCTIVE: Stop and remove all volumes (deletes all data)
+	@echo "⚠️  WARNING: This will DELETE all PostgreSQL, Redis, NATS, MinIO data"
+	@read -p "Type 'yes' to confirm: " response; \
+	if [ "$$response" = "yes" ]; then \
+		$(COMPOSE) down -v; \
+		echo "✅ Environment reset complete"; \
+	else \
+		echo "❌ Reset cancelled"; \
+		exit 1; \
+	fi
 
-dev-logs:
-	$(COMPOSE) logs -f
+dev-logs: ## Tail Docker Compose logs with timestamps
+	@$(COMPOSE) logs -f --timestamps
 
-dev-ps:
-	$(COMPOSE) ps
+dev-ps: ## Show container status
+	@$(COMPOSE) ps
 
 # ──────────────────────────────────────────────────────────────
 # Proto
@@ -182,35 +237,53 @@ proto-breaking: proto-deps
 # ──────────────────────────────────────────────────────────────
 # Migrations — direct Postgres (5432); migrations use BYPASSRLS admin
 # ──────────────────────────────────────────────────────────────
-migrate-up:
+migrate-validate: ## Validate all migration files (up/down pairs, naming)
+	@bash scripts/migrate-validate.sh
+
+migrate-up: migrate-validate ## Apply all pending migrations to all services
 	@if [ -z "$(MIGRATE_SERVICES)" ]; then \
 		echo "No services with migrations/ found"; exit 1; \
 	fi
 	@command -v migrate >/dev/null 2>&1 || { echo "ERROR: install golang-migrate"; exit 1; }
+	@echo "Applying migrations for: $(MIGRATE_SERVICES)"
 	@for svc in $(MIGRATE_SERVICES); do \
-		echo "→ Migrating $$svc..."; \
+		echo "  → $$svc"; \
 		migrate -path "services/$$svc/migrations" -database "$(DB_URL)" up || exit 1; \
 	done
-	@echo "All migrations applied."
+	@echo "✅ All migrations applied successfully"
 
-migrate-down:
+migrate-down: ## Rollback all migrations by one step (per service)
 	@if [ -z "$(MIGRATE_SERVICES)" ]; then \
 		echo "No services with migrations/ found"; exit 1; \
 	fi
+	@echo "⚠️  Rolling back migrations by 1 step for: $(MIGRATE_SERVICES)"
 	@command -v migrate >/dev/null 2>&1 || { echo "ERROR: install golang-migrate"; exit 1; }
 	@for svc in $(MIGRATE_SERVICES); do \
-		echo "← Rolling back $$svc (1 step)..."; \
+		echo "  ← $$svc"; \
 		migrate -path "services/$$svc/migrations" -database "$(DB_URL)" down 1 || exit 1; \
 	done
+	@echo "✅ Migrations rolled back"
 
-migrate-status:
+migrate-fresh: ## Reset and reapply all migrations (destructive for dev only)
+	@echo "⚠️  This will DELETE all database data and reapply migrations"
+	@read -p "Type 'yes' to confirm: " response; \
+	if [ "$$response" = "yes" ]; then \
+		make migrate-down || true; \
+		make migrate-up; \
+		echo "✅ Database reset and refreshed"; \
+	else \
+		echo "❌ Cancelled"; \
+		exit 1; \
+	fi
+
+migrate-status: ## Show current migration version for each service
 	@if [ -z "$(MIGRATE_SERVICES)" ]; then \
 		echo "No services with migrations/ found"; exit 1; \
 	fi
+	@echo "Migration Status:"
 	@command -v migrate >/dev/null 2>&1 || { echo "ERROR: install golang-migrate"; exit 1; }
 	@for svc in $(MIGRATE_SERVICES); do \
-		echo "Status: $$svc"; \
-		migrate -path "services/$$svc/migrations" -database "$(DB_URL)" version || true; \
+		echo "  $$svc: $$(migrate -path "services/$$svc/migrations" -database "$(DB_URL)" version 2>/dev/null || echo 'no migrations')"; \
 	done
 
 # ──────────────────────────────────────────────────────────────
