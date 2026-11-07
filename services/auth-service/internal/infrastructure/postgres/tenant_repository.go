@@ -2,14 +2,18 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
+	sqlcdb "github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TenantRepository implements domain.TenantRepository using PostgreSQL.
+// Tenants are not tenant-scoped, so queries run directly on the pool without RLS.
 type TenantRepository struct {
 	pool *pgxpool.Pool
 }
@@ -20,20 +24,16 @@ func NewTenantRepository(pool *pgxpool.Pool) *TenantRepository {
 }
 
 // Create persists a new tenant.
-// Note: Tenants are not tenant-scoped, so no RLS context needed.
 func (r *TenantRepository) Create(ctx context.Context, tenant *domain.Tenant) error {
-	query := `
-		INSERT INTO auth.tenants (id, slug, company_name, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`
-	_, err := r.pool.Exec(ctx, query,
-		tenant.ID().String(),
-		tenant.Slug().String(),
-		tenant.CompanyName(),
-		tenant.IsActive(),
-		tenant.CreatedAt(),
-		tenant.UpdatedAt(),
-	)
+	q := sqlcdb.New(r.pool)
+	err := q.InsertTenant(ctx, sqlcdb.InsertTenantParams{
+		ID:          uuid.MustParse(tenant.ID().String()),
+		Slug:        tenant.Slug().String(),
+		CompanyName: tenant.CompanyName(),
+		IsActive:    tenant.IsActive(),
+		CreatedAt:   tenant.CreatedAt(),
+		UpdatedAt:   tenant.UpdatedAt(),
+	})
 	if err != nil {
 		return fmt.Errorf("insert tenant: %w", err)
 	}
@@ -42,91 +42,39 @@ func (r *TenantRepository) Create(ctx context.Context, tenant *domain.Tenant) er
 
 // GetByID retrieves a tenant by ID.
 func (r *TenantRepository) GetByID(ctx context.Context, id domain.TenantID) (*domain.Tenant, error) {
-	query := `
-		SELECT id, slug, company_name, is_active, created_at, updated_at
-		FROM auth.tenants
-		WHERE id = $1
-	`
-	var (
-		tenantID    string
-		slug        string
-		companyName string
-		isActive    bool
-	)
-	err := r.pool.QueryRow(ctx, query, id.String()).Scan(
-		&tenantID,
-		&slug,
-		&companyName,
-		&isActive,
-	)
-	if err == pgx.ErrNoRows {
+	q := sqlcdb.New(r.pool)
+	row, err := q.GetTenantByID(ctx, uuid.MustParse(id.String()))
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("tenant not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query tenant: %w", err)
 	}
-
-	tenant := domain.NewTenant(
-		domain.MustNewTenantID(tenantID),
-		domain.MustNewTenantSlug(slug),
-		companyName,
-	)
-	if !isActive {
-		tenant.Deactivate()
-	}
-	return tenant, nil
+	return buildTenant(row.ID, row.Slug, row.CompanyName, row.IsActive), nil
 }
 
 // GetBySlug retrieves a tenant by its URL slug.
 func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
-	query := `
-		SELECT id, slug, company_name, is_active, created_at, updated_at
-		FROM auth.tenants
-		WHERE slug = $1
-	`
-	var (
-		tenantID    string
-		slugValue   string
-		companyName string
-		isActive    bool
-	)
-	err := r.pool.QueryRow(ctx, query, slug).Scan(
-		&tenantID,
-		&slugValue,
-		&companyName,
-		&isActive,
-	)
-	if err == pgx.ErrNoRows {
+	q := sqlcdb.New(r.pool)
+	row, err := q.GetTenantBySlug(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("tenant not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query tenant by slug: %w", err)
 	}
-
-	tenant := domain.NewTenant(
-		domain.MustNewTenantID(tenantID),
-		domain.MustNewTenantSlug(slugValue),
-		companyName,
-	)
-	if !isActive {
-		tenant.Deactivate()
-	}
-	return tenant, nil
+	return buildTenant(row.ID, row.Slug, row.CompanyName, row.IsActive), nil
 }
 
 // Update persists changes to a tenant.
 func (r *TenantRepository) Update(ctx context.Context, tenant *domain.Tenant) error {
-	query := `
-		UPDATE auth.tenants
-		SET company_name = $1, is_active = $2, updated_at = $3
-		WHERE id = $4
-	`
-	result, err := r.pool.Exec(ctx, query,
-		tenant.CompanyName(),
-		tenant.IsActive(),
-		tenant.UpdatedAt(),
-		tenant.ID().String(),
-	)
+	q := sqlcdb.New(r.pool)
+	result, err := q.UpdateTenant(ctx, sqlcdb.UpdateTenantParams{
+		CompanyName: tenant.CompanyName(),
+		IsActive:    tenant.IsActive(),
+		UpdatedAt:   tenant.UpdatedAt(),
+		ID:          uuid.MustParse(tenant.ID().String()),
+	})
 	if err != nil {
 		return fmt.Errorf("update tenant: %w", err)
 	}
@@ -138,8 +86,8 @@ func (r *TenantRepository) Update(ctx context.Context, tenant *domain.Tenant) er
 
 // Delete removes a tenant and all its data (cascading FK constraints).
 func (r *TenantRepository) Delete(ctx context.Context, id domain.TenantID) error {
-	query := `DELETE FROM auth.tenants WHERE id = $1`
-	result, err := r.pool.Exec(ctx, query, id.String())
+	q := sqlcdb.New(r.pool)
+	result, err := q.DeleteTenant(ctx, uuid.MustParse(id.String()))
 	if err != nil {
 		return fmt.Errorf("delete tenant: %w", err)
 	}
@@ -147,4 +95,16 @@ func (r *TenantRepository) Delete(ctx context.Context, id domain.TenantID) error
 		return fmt.Errorf("tenant not found")
 	}
 	return nil
+}
+
+func buildTenant(id uuid.UUID, slug, companyName string, isActive bool) *domain.Tenant {
+	tenant := domain.NewTenant(
+		domain.MustNewTenantID(id.String()),
+		domain.MustNewTenantSlug(slug),
+		companyName,
+	)
+	if !isActive {
+		tenant.Deactivate()
+	}
+	return tenant
 }

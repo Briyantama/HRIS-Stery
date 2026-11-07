@@ -2,14 +2,18 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
+	sqlcdb "github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PermissionRepository implements domain.PermissionRepository using PostgreSQL.
+// Permissions are global (not tenant-scoped), so queries run directly on the pool.
 type PermissionRepository struct {
 	pool *pgxpool.Pool
 }
@@ -21,12 +25,11 @@ func NewPermissionRepository(pool *pgxpool.Pool) *PermissionRepository {
 
 // Create persists a new permission (global, not tenant-scoped).
 func (r *PermissionRepository) Create(ctx context.Context, name, description string) error {
-	query := `
-		INSERT INTO auth.permissions (name, description, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (name) DO NOTHING
-	`
-	_, err := r.pool.Exec(ctx, query, name, description)
+	q := sqlcdb.New(r.pool)
+	err := q.InsertPermission(ctx, sqlcdb.InsertPermissionParams{
+		Name:        name,
+		Description: &description,
+	})
 	if err != nil {
 		return fmt.Errorf("insert permission: %w", err)
 	}
@@ -35,10 +38,9 @@ func (r *PermissionRepository) Create(ctx context.Context, name, description str
 
 // GetByName retrieves a permission by name.
 func (r *PermissionRepository) GetByName(ctx context.Context, name string) (domain.Permission, error) {
-	query := `SELECT name FROM auth.permissions WHERE name = $1`
-	var permName string
-	err := r.pool.QueryRow(ctx, query, name).Scan(&permName)
-	if err == pgx.ErrNoRows {
+	q := sqlcdb.New(r.pool)
+	permName, err := q.GetPermissionByName(ctx, name)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("permission not found")
 	}
 	if err != nil {
@@ -49,46 +51,32 @@ func (r *PermissionRepository) GetByName(ctx context.Context, name string) (doma
 
 // List retrieves all permissions.
 func (r *PermissionRepository) List(ctx context.Context) ([]domain.Permission, error) {
-	query := `SELECT name FROM auth.permissions ORDER BY name`
-	rows, err := r.pool.Query(ctx, query)
+	q := sqlcdb.New(r.pool)
+	names, err := q.ListPermissions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query permissions: %w", err)
 	}
-	defer rows.Close()
-
-	var perms []domain.Permission
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan permission: %w", err)
-		}
-		perms = append(perms, domain.Permission(name))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate permissions: %w", err)
+	perms := make([]domain.Permission, len(names))
+	for i, n := range names {
+		perms[i] = domain.Permission(n)
 	}
 	return perms, nil
 }
 
 // AssignToRole grants a permission to a role.
 func (r *PermissionRepository) AssignToRole(ctx context.Context, roleID domain.RoleID, permission domain.Permission) error {
-	// First get the permission ID
-	permQuery := `SELECT id FROM auth.permissions WHERE name = $1`
-	var permID string
-	err := r.pool.QueryRow(ctx, permQuery, permission.String()).Scan(&permID)
-	if err == pgx.ErrNoRows {
+	q := sqlcdb.New(r.pool)
+	permID, err := q.GetPermissionIDByName(ctx, permission.String())
+	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("permission not found")
 	}
 	if err != nil {
 		return fmt.Errorf("query permission: %w", err)
 	}
-
-	query := `
-		INSERT INTO auth.role_permissions (role_id, permission_id)
-		VALUES ($1, $2)
-		ON CONFLICT (role_id, permission_id) DO NOTHING
-	`
-	_, err = r.pool.Exec(ctx, query, roleID.String(), permID)
+	err = q.InsertRolePermission(ctx, sqlcdb.InsertRolePermissionParams{
+		RoleID:       uuid.MustParse(roleID.String()),
+		PermissionID: permID,
+	})
 	if err != nil {
 		return fmt.Errorf("assign permission to role: %w", err)
 	}
@@ -97,18 +85,18 @@ func (r *PermissionRepository) AssignToRole(ctx context.Context, roleID domain.R
 
 // RemoveFromRole revokes a permission from a role.
 func (r *PermissionRepository) RemoveFromRole(ctx context.Context, roleID domain.RoleID, permission domain.Permission) error {
-	permQuery := `SELECT id FROM auth.permissions WHERE name = $1`
-	var permID string
-	err := r.pool.QueryRow(ctx, permQuery, permission.String()).Scan(&permID)
-	if err == pgx.ErrNoRows {
+	q := sqlcdb.New(r.pool)
+	permID, err := q.GetPermissionIDByName(ctx, permission.String())
+	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("permission not found")
 	}
 	if err != nil {
 		return fmt.Errorf("query permission: %w", err)
 	}
-
-	query := `DELETE FROM auth.role_permissions WHERE role_id = $1 AND permission_id = $2`
-	_, err = r.pool.Exec(ctx, query, roleID.String(), permID)
+	err = q.DeleteRolePermission(ctx, sqlcdb.DeleteRolePermissionParams{
+		RoleID:       uuid.MustParse(roleID.String()),
+		PermissionID: permID,
+	})
 	if err != nil {
 		return fmt.Errorf("remove permission from role: %w", err)
 	}
@@ -117,69 +105,35 @@ func (r *PermissionRepository) RemoveFromRole(ctx context.Context, roleID domain
 
 // GetForRole retrieves all permissions assigned to a role.
 func (r *PermissionRepository) GetForRole(ctx context.Context, roleID domain.RoleID) ([]domain.Permission, error) {
-	query := `
-		SELECT p.name
-		FROM auth.permissions p
-		JOIN auth.role_permissions rp ON p.id = rp.permission_id
-		WHERE rp.role_id = $1
-		ORDER BY p.name
-	`
-	rows, err := r.pool.Query(ctx, query, roleID.String())
+	q := sqlcdb.New(r.pool)
+	names, err := q.GetPermissionsForRole(ctx, uuid.MustParse(roleID.String()))
 	if err != nil {
 		return nil, fmt.Errorf("query role permissions: %w", err)
 	}
-	defer rows.Close()
-
-	var perms []domain.Permission
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan permission: %w", err)
-		}
-		perms = append(perms, domain.Permission(name))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate permissions: %w", err)
+	perms := make([]domain.Permission, len(names))
+	for i, n := range names {
+		perms[i] = domain.Permission(n)
 	}
 	return perms, nil
 }
 
 // GetForRoles retrieves all unique permissions assigned to multiple roles in a single query.
-// This prevents N+1 queries when fetching permissions for multiple roles.
 func (r *PermissionRepository) GetForRoles(ctx context.Context, roleIDs []domain.RoleID) ([]domain.Permission, error) {
 	if len(roleIDs) == 0 {
 		return []domain.Permission{}, nil
 	}
-
-	// Convert roleIDs to strings for SQL
-	roleIDStrs := make([]string, len(roleIDs))
+	q := sqlcdb.New(r.pool)
+	uuids := make([]uuid.UUID, len(roleIDs))
 	for i, id := range roleIDs {
-		roleIDStrs[i] = id.String()
+		uuids[i] = uuid.MustParse(id.String())
 	}
-
-	query := `
-		SELECT DISTINCT p.name
-		FROM auth.permissions p
-		JOIN auth.role_permissions rp ON p.id = rp.permission_id
-		WHERE rp.role_id = ANY($1)
-		ORDER BY p.name
-	`
-	rows, err := r.pool.Query(ctx, query, roleIDStrs)
+	names, err := q.GetPermissionsForRoles(ctx, uuids)
 	if err != nil {
 		return nil, fmt.Errorf("query permissions for roles: %w", err)
 	}
-	defer rows.Close()
-
-	var perms []domain.Permission
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan permission: %w", err)
-		}
-		perms = append(perms, domain.Permission(name))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate permissions: %w", err)
+	perms := make([]domain.Permission, len(names))
+	for i, n := range names {
+		perms[i] = domain.Permission(n)
 	}
 	return perms, nil
 }

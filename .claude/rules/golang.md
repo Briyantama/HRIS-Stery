@@ -7,7 +7,7 @@ globs: ["services/**/*.go", "services/**/*.mod"]
 
 ## Project Layout (per service)
 
-```
+```bash
 cmd/server/main.go                  ← entrypoint: wire deps, start server
 internal/
   domain/                           ← aggregates, value objects, domain events (pure Go, no imports)

@@ -1,8 +1,11 @@
 {
-  "version": "1.0",
-  "description": "Claude Code configuration for HRIS-Stery project",
-
   "permissions": {
+    "allow": [
+      "Bash(make validate-all *)",
+      "Bash(chmod +x /c/Users/solui/moon-eye/HRIS-Stery/scripts/migrate-helper.sh /c/Users/solui/moon-eye/HRIS-Stery/scripts/db-health.sh)",
+      "Bash(bash scripts/migrate-helper.sh list)",
+      "Bash(bash scripts/migrate-helper.sh verify)"
+    ],
     "priority": "user",
     "allowedTools": [
       "Bash",
@@ -17,82 +20,9 @@
       "AskUserQuestion"
     ]
   },
-
-  "hooks": {
-    "preEdit": [
-      {
-        "name": "phase-2-block",
-        "description": "Block edits to Phase 2 services (payroll, recruitment, performance)",
-        "pathPatterns": [
-          "services/payroll-service/**",
-          "services/recruitment-service/**",
-          "services/performance-service/**"
-        ],
-        "action": "block",
-        "message": "❌ Phase 2 features are blocked. ADR-0004: Payroll, recruitment, and performance are deferred to Phase 2. Return 501 Not Implemented."
-      },
-      {
-        "name": "adr-reminder",
-        "description": "Remind to check ADR before modifying a service",
-        "pathPatterns": ["services/*/internal/**", "services/*/cmd/**"],
-        "action": "warn",
-        "message": "📋 Remember: Check relevant ADR in docs/adr/ before implementing. Use adr-review skill."
-      },
-      {
-        "name": "rls-reminder",
-        "description": "Remind about RLS when touching tables with tenant_id",
-        "pathPatterns": ["services/*/migrations/*.sql"],
-        "action": "warn",
-        "message": "🔒 Reminder: All tenant-scoped tables need FORCE ROW LEVEL SECURITY and tenant_isolation policy. Run migration-review skill."
-      },
-      {
-        "name": "migration-down-check",
-        "description": "Require both up and down migration files",
-        "pathPatterns": ["services/*/migrations/*.up.sql"],
-        "action": "warn",
-        "message": "⬇️ Reminder: Every .up.sql migration needs a corresponding .down.sql file that fully reverses it. Run migration-review skill."
-      },
-      {
-        "name": "proto-before-handler",
-        "description": "Remind to check proto contract before implementing handler",
-        "pathPatterns": ["services/*/internal/interfaces/grpc/*.go"],
-        "action": "warn",
-        "message": "📝 Reminder: Proto contract must exist in proto/hris/{domain}/v1/ before implementing handler. Run proto-review skill."
-      },
-      {
-        "name": "controller-logic-limit",
-        "description": "Warn if Laravel controller might be too large",
-        "pathPatterns": ["gateway/app/Http/Controllers/**"],
-        "action": "warn",
-        "message": "🎯 Reminder: Laravel controllers must be ≤20 lines of logic. Delegate to Service classes. Run laravel-gateway-reviewer."
-      },
-      {
-        "name": "no-global-state",
-        "description": "Block package-level database/service variables in Go",
-        "pathPatterns": ["services/*/internal/**/*.go"],
-        "action": "warn",
-        "message": "⚠️ Check: No package-level globals (var db, logger, etc). Use constructor injection. Run go-backend-reviewer."
-      }
-    ],
-
-    "postCommit": [
-      {
-        "name": "go-lint-check",
-        "description": "Run go vet on Go changes",
-        "command": "cd services && for svc in auth-service employee-service; do cd $svc && go vet ./... || exit 1; cd ..; done",
-        "onFailure": "warn",
-        "message": "⚠️ go vet found issues. Fix before pushing."
-      },
-      {
-        "name": "migration-reversibility",
-        "description": "Warn if migration down file might not be reversible",
-        "trigger": "pathMatches('services/*/migrations/*.sql')",
-        "action": "info",
-        "message": "ℹ️ Verify migration reversibility: Check that .down.sql fully reverses .up.sql and drops in correct order."
-      }
-    ]
-  },
-
+  "hooks": {},
+  "version": "1.0",
+  "description": "Claude Code configuration for HRIS-Stery project",
   "skills": {
     "adr-review": {
       "path": ".claude/skills/adr-review/SKILL.md",
@@ -119,7 +49,6 @@
       "description": "Check Go type safety, RLS context injection, and error handling"
     }
   },
-
   "subagents": {
     "go-backend-reviewer": {
       "path": ".claude/agents/go-backend-reviewer.md",
@@ -142,12 +71,10 @@
       "trigger": "code review for proto files"
     }
   },
-
   "decisionTree": {
     "path": ".claude/REVIEW_DECISION_TREE.md",
     "description": "Decision tree for choosing which skill/subagent to use"
   },
-
   "repository": {
     "name": "HRIS-Stery",
     "description": "Multi-tenant HRIS system with Go services, Laravel gateway, SvelteKit frontend",

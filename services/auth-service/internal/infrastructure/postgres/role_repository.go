@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
+	"github.com/google/uuid"
 	shared "github.com/hris-stery/hris-stery/services/_shared/postgres"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
+	sqlcdb "github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,18 +26,16 @@ func NewRoleRepository(pool *pgxpool.Pool) *RoleRepository {
 // Create persists a new role.
 func (r *RoleRepository) Create(ctx context.Context, role *domain.Role) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(role.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			INSERT INTO auth.roles (id, tenant_id, name, description, is_system, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`
-		_, err := tx.Exec(ctx, query,
-			role.ID().String(),
-			role.TenantID().String(),
-			role.Name(),
-			role.Description(),
-			role.IsSystem(),
-			role.CreatedAt(),
-		)
+		q := sqlcdb.New(tx)
+		desc := role.Description()
+		err := q.InsertRole(ctx, sqlcdb.InsertRoleParams{
+			ID:          uuid.MustParse(role.ID().String()),
+			TenantID:    uuid.MustParse(role.TenantID().String()),
+			Name:        role.Name(),
+			Description: &desc,
+			IsSystem:    role.IsSystem(),
+			CreatedAt:   role.CreatedAt(),
+		})
 		if err != nil {
 			return fmt.Errorf("insert role: %w", err)
 		}
@@ -47,27 +47,24 @@ func (r *RoleRepository) Create(ctx context.Context, role *domain.Role) error {
 func (r *RoleRepository) GetByID(ctx context.Context, tenantID domain.TenantID, id domain.RoleID) (*domain.Role, error) {
 	var role *domain.Role
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT id, tenant_id, name, description, is_system, created_at
-			FROM auth.roles
-			WHERE id = $1
-		`
-		var roleID, tenantIDStr, name, description string
-		var isSystem bool
-		var createdAt time.Time
-		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(&roleID, &tenantIDStr, &name, &description, &isSystem, &createdAt)
-		if rowErr == pgx.ErrNoRows {
+		q := sqlcdb.New(tx)
+		row, rowErr := q.GetRoleByID(ctx, uuid.MustParse(id.String()))
+		if errors.Is(rowErr, pgx.ErrNoRows) {
 			return fmt.Errorf("role not found")
 		}
 		if rowErr != nil {
 			return fmt.Errorf("query role: %w", rowErr)
 		}
+		desc := ""
+		if row.Description != nil {
+			desc = *row.Description
+		}
 		role = domain.NewRole(
-			domain.MustNewRoleID(roleID),
-			domain.MustNewTenantID(tenantIDStr),
-			name,
-			description,
-			isSystem,
+			domain.MustNewRoleID(row.ID.String()),
+			domain.MustNewTenantID(row.TenantID.String()),
+			row.Name,
+			desc,
+			row.IsSystem,
 		)
 		return nil
 	})
@@ -81,27 +78,27 @@ func (r *RoleRepository) GetByID(ctx context.Context, tenantID domain.TenantID, 
 func (r *RoleRepository) GetByTenantAndName(ctx context.Context, tenantID domain.TenantID, name string) (*domain.Role, error) {
 	var role *domain.Role
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT id, tenant_id, name, description, is_system, created_at
-			FROM auth.roles
-			WHERE tenant_id = $1 AND name = $2
-		`
-		var roleID, tenantIDStr, roleName, description string
-		var isSystem bool
-		var createdAt time.Time
-		rowErr := tx.QueryRow(ctx, query, tenantID.String(), name).Scan(&roleID, &tenantIDStr, &roleName, &description, &isSystem, &createdAt)
-		if rowErr == pgx.ErrNoRows {
+		q := sqlcdb.New(tx)
+		row, rowErr := q.GetRoleByTenantAndName(ctx, sqlcdb.GetRoleByTenantAndNameParams{
+			TenantID: uuid.MustParse(tenantID.String()),
+			Name:     name,
+		})
+		if errors.Is(rowErr, pgx.ErrNoRows) {
 			return fmt.Errorf("role not found")
 		}
 		if rowErr != nil {
 			return fmt.Errorf("query role by name: %w", rowErr)
 		}
+		desc := ""
+		if row.Description != nil {
+			desc = *row.Description
+		}
 		role = domain.NewRole(
-			domain.MustNewRoleID(roleID),
-			domain.MustNewTenantID(tenantIDStr),
-			roleName,
-			description,
-			isSystem,
+			domain.MustNewRoleID(row.ID.String()),
+			domain.MustNewTenantID(row.TenantID.String()),
+			row.Name,
+			desc,
+			row.IsSystem,
 		)
 		return nil
 	})
@@ -115,33 +112,25 @@ func (r *RoleRepository) GetByTenantAndName(ctx context.Context, tenantID domain
 func (r *RoleRepository) ListByTenant(ctx context.Context, tenantID domain.TenantID) ([]*domain.Role, error) {
 	var roles []*domain.Role
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT id, tenant_id, name, description, is_system, created_at
-			FROM auth.roles
-			WHERE tenant_id = $1
-		`
-		rows, err := tx.Query(ctx, query, tenantID.String())
+		q := sqlcdb.New(tx)
+		rows, err := q.ListRolesByTenant(ctx, uuid.MustParse(tenantID.String()))
 		if err != nil {
 			return fmt.Errorf("query roles: %w", err)
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var roleID, tenantIDStr, name, description string
-			var isSystem bool
-			var createdAt time.Time
-			if err := rows.Scan(&roleID, &tenantIDStr, &name, &description, &isSystem, &createdAt); err != nil {
-				return fmt.Errorf("scan role: %w", err)
+		for _, row := range rows {
+			desc := ""
+			if row.Description != nil {
+				desc = *row.Description
 			}
 			roles = append(roles, domain.NewRole(
-				domain.MustNewRoleID(roleID),
-				domain.MustNewTenantID(tenantIDStr),
-				name,
-				description,
-				isSystem,
+				domain.MustNewRoleID(row.ID.String()),
+				domain.MustNewTenantID(row.TenantID.String()),
+				row.Name,
+				desc,
+				row.IsSystem,
 			))
 		}
-		return rows.Err()
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -152,10 +141,13 @@ func (r *RoleRepository) ListByTenant(ctx context.Context, tenantID domain.Tenan
 // Update persists changes to a role.
 func (r *RoleRepository) Update(ctx context.Context, role *domain.Role) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(role.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		result, err := tx.Exec(ctx,
-			`UPDATE auth.roles SET name = $1, description = $2 WHERE id = $3`,
-			role.Name(), role.Description(), role.ID().String(),
-		)
+		q := sqlcdb.New(tx)
+		desc := role.Description()
+		result, err := q.UpdateRole(ctx, sqlcdb.UpdateRoleParams{
+			Name:        role.Name(),
+			Description: &desc,
+			ID:          uuid.MustParse(role.ID().String()),
+		})
 		if err != nil {
 			return fmt.Errorf("update role: %w", err)
 		}

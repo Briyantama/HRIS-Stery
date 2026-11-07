@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
+	"github.com/google/uuid"
 	shared "github.com/hris-stery/hris-stery/services/_shared/postgres"
 	"github.com/hris-stery/hris-stery/services/auth-service/internal/domain"
+	sqlcdb "github.com/hris-stery/hris-stery/services/auth-service/internal/infrastructure/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,21 +26,18 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 // Create persists a new user.
 func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(user.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			INSERT INTO auth.users (id, tenant_id, email, password_hash, full_name, is_active, email_verified, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`
-		_, err := tx.Exec(ctx, query,
-			user.ID().String(),
-			user.TenantID().String(),
-			user.Email(),
-			user.PasswordHash(),
-			user.FullName(),
-			user.IsActive(),
-			user.EmailVerified(),
-			user.CreatedAt(),
-			user.UpdatedAt(),
-		)
+		q := sqlcdb.New(tx)
+		err := q.InsertUser(ctx, sqlcdb.InsertUserParams{
+			ID:            uuid.MustParse(user.ID().String()),
+			TenantID:      uuid.MustParse(user.TenantID().String()),
+			Email:         user.Email(),
+			PasswordHash:  user.PasswordHash(),
+			FullName:      user.FullName(),
+			IsActive:      user.IsActive(),
+			EmailVerified: user.EmailVerified(),
+			CreatedAt:     user.CreatedAt(),
+			UpdatedAt:     user.UpdatedAt(),
+		})
 		if err != nil {
 			return fmt.Errorf("insert user: %w", err)
 		}
@@ -50,23 +49,9 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 func (r *UserRepository) GetByID(ctx context.Context, tenantID domain.TenantID, id domain.UserID) (*domain.User, error) {
 	var user *domain.User
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT id, tenant_id, email, password_hash, full_name, is_active, email_verified, last_login_at, last_login_ip_addr, created_at, updated_at
-			FROM auth.users
-			WHERE id = $1
-		`
-		var (
-			userID, tenantIDStr, email, passwordHash, fullName string
-			isActive, emailVerified                            bool
-			lastLoginAt                                        *time.Time
-			lastLoginIP                                        *string
-			createdAt, updatedAt                               time.Time
-		)
-		rowErr := tx.QueryRow(ctx, query, id.String()).Scan(
-			&userID, &tenantIDStr, &email, &passwordHash, &fullName,
-			&isActive, &emailVerified, &lastLoginAt, &lastLoginIP, &createdAt, &updatedAt,
-		)
-		if rowErr == pgx.ErrNoRows {
+		q := sqlcdb.New(tx)
+		row, rowErr := q.GetUserByID(ctx, uuid.MustParse(id.String()))
+		if errors.Is(rowErr, pgx.ErrNoRows) {
 			return fmt.Errorf("user not found")
 		}
 		if rowErr != nil {
@@ -74,18 +59,18 @@ func (r *UserRepository) GetByID(ctx context.Context, tenantID domain.TenantID, 
 		}
 
 		lastLoginIPStr := ""
-		if lastLoginIP != nil {
-			lastLoginIPStr = *lastLoginIP
+		if row.LastLoginIpAddr != nil {
+			lastLoginIPStr = *row.LastLoginIpAddr
 		}
 
 		var rehydrateErr error
 		user, rehydrateErr = domain.RehydrateUser(
-			domain.MustNewUserID(userID),
-			domain.MustNewTenantID(tenantIDStr),
-			email, passwordHash, fullName,
-			isActive, emailVerified,
-			createdAt, updatedAt,
-			lastLoginAt, lastLoginIPStr,
+			domain.MustNewUserID(row.ID.String()),
+			domain.MustNewTenantID(row.TenantID.String()),
+			row.Email, row.PasswordHash, row.FullName,
+			row.IsActive, row.EmailVerified,
+			row.CreatedAt, row.UpdatedAt,
+			row.LastLoginAt, lastLoginIPStr,
 		)
 		return rehydrateErr
 	})
@@ -99,23 +84,12 @@ func (r *UserRepository) GetByID(ctx context.Context, tenantID domain.TenantID, 
 func (r *UserRepository) GetByTenantAndEmail(ctx context.Context, tenantID domain.TenantID, email string) (*domain.User, error) {
 	var user *domain.User
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT id, tenant_id, email, password_hash, full_name, is_active, email_verified, last_login_at, last_login_ip_addr, created_at, updated_at
-			FROM auth.users
-			WHERE tenant_id = $1 AND email = $2
-		`
-		var (
-			userID, tenantIDStr, emailVal, passwordHash, fullName string
-			isActive, emailVerified                               bool
-			lastLoginAt                                           *time.Time
-			lastLoginIP                                           *string
-			createdAt, updatedAt                                  time.Time
-		)
-		rowErr := tx.QueryRow(ctx, query, tenantID.String(), email).Scan(
-			&userID, &tenantIDStr, &emailVal, &passwordHash, &fullName,
-			&isActive, &emailVerified, &lastLoginAt, &lastLoginIP, &createdAt, &updatedAt,
-		)
-		if rowErr == pgx.ErrNoRows {
+		q := sqlcdb.New(tx)
+		row, rowErr := q.GetUserByTenantAndEmail(ctx, sqlcdb.GetUserByTenantAndEmailParams{
+			TenantID: uuid.MustParse(tenantID.String()),
+			Email:    email,
+		})
+		if errors.Is(rowErr, pgx.ErrNoRows) {
 			return fmt.Errorf("user not found")
 		}
 		if rowErr != nil {
@@ -123,18 +97,18 @@ func (r *UserRepository) GetByTenantAndEmail(ctx context.Context, tenantID domai
 		}
 
 		lastLoginIPStr := ""
-		if lastLoginIP != nil {
-			lastLoginIPStr = *lastLoginIP
+		if row.LastLoginIpAddr != nil {
+			lastLoginIPStr = *row.LastLoginIpAddr
 		}
 
 		var rehydrateErr error
 		user, rehydrateErr = domain.RehydrateUser(
-			domain.MustNewUserID(userID),
-			domain.MustNewTenantID(tenantIDStr),
-			emailVal, passwordHash, fullName,
-			isActive, emailVerified,
-			createdAt, updatedAt,
-			lastLoginAt, lastLoginIPStr,
+			domain.MustNewUserID(row.ID.String()),
+			domain.MustNewTenantID(row.TenantID.String()),
+			row.Email, row.PasswordHash, row.FullName,
+			row.IsActive, row.EmailVerified,
+			row.CreatedAt, row.UpdatedAt,
+			row.LastLoginAt, lastLoginIPStr,
 		)
 		return rehydrateErr
 	})
@@ -147,20 +121,22 @@ func (r *UserRepository) GetByTenantAndEmail(ctx context.Context, tenantID domai
 // Update persists changes to a user.
 func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(user.TenantID().String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			UPDATE auth.users
-			SET full_name = $1, is_active = $2, email_verified = $3, last_login_at = $4, last_login_ip_addr = $5, updated_at = $6
-			WHERE id = $7
-		`
-		result, err := tx.Exec(ctx, query,
-			user.FullName(),
-			user.IsActive(),
-			user.EmailVerified(),
-			user.LastLoginAt(),
-			user.LastLoginIPAddr(),
-			user.UpdatedAt(),
-			user.ID().String(),
-		)
+		q := sqlcdb.New(tx)
+
+		var lastLoginIP *string
+		if ip := user.LastLoginIPAddr(); ip != "" {
+			lastLoginIP = &ip
+		}
+
+		result, err := q.UpdateUser(ctx, sqlcdb.UpdateUserParams{
+			FullName:        user.FullName(),
+			IsActive:        user.IsActive(),
+			EmailVerified:   user.EmailVerified(),
+			LastLoginAt:     user.LastLoginAt(),
+			LastLoginIpAddr: lastLoginIP,
+			UpdatedAt:       user.UpdatedAt(),
+			ID:              uuid.MustParse(user.ID().String()),
+		})
 		if err != nil {
 			return fmt.Errorf("update user: %w", err)
 		}
@@ -174,7 +150,8 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 // Delete removes a user.
 func (r *UserRepository) Delete(ctx context.Context, tenantID domain.TenantID, id domain.UserID) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		result, err := tx.Exec(ctx, `DELETE FROM auth.users WHERE id = $1`, id.String())
+		q := sqlcdb.New(tx)
+		result, err := q.DeleteUser(ctx, uuid.MustParse(id.String()))
 		if err != nil {
 			return fmt.Errorf("delete user: %w", err)
 		}
@@ -189,34 +166,25 @@ func (r *UserRepository) Delete(ctx context.Context, tenantID domain.TenantID, i
 func (r *UserRepository) GetRoles(ctx context.Context, tenantID domain.TenantID, userID domain.UserID) ([]*domain.Role, error) {
 	var roles []*domain.Role
 	err := shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		query := `
-			SELECT r.id, r.tenant_id, r.name, r.description, r.is_system, r.created_at
-			FROM auth.roles r
-			JOIN auth.user_roles ur ON r.id = ur.role_id
-			WHERE ur.user_id = $1
-		`
-		rows, err := tx.Query(ctx, query, userID.String())
+		q := sqlcdb.New(tx)
+		rows, err := q.GetUserRoles(ctx, uuid.MustParse(userID.String()))
 		if err != nil {
 			return fmt.Errorf("query user roles: %w", err)
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var roleID, roleTenantID, name, description string
-			var isSystem bool
-			var createdAt time.Time
-			if err := rows.Scan(&roleID, &roleTenantID, &name, &description, &isSystem, &createdAt); err != nil {
-				return fmt.Errorf("scan role: %w", err)
+		for _, row := range rows {
+			desc := ""
+			if row.Description != nil {
+				desc = *row.Description
 			}
 			roles = append(roles, domain.NewRole(
-				domain.MustNewRoleID(roleID),
-				domain.MustNewTenantID(roleTenantID),
-				name,
-				description,
-				isSystem,
+				domain.MustNewRoleID(row.ID.String()),
+				domain.MustNewTenantID(row.TenantID.String()),
+				row.Name,
+				desc,
+				row.IsSystem,
 			))
 		}
-		return rows.Err()
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -227,32 +195,21 @@ func (r *UserRepository) GetRoles(ctx context.Context, tenantID domain.TenantID,
 // SetRoles updates the roles assigned to a user.
 func (r *UserRepository) SetRoles(ctx context.Context, tenantID domain.TenantID, userID domain.UserID, roleIDs []domain.RoleID) error {
 	return shared.WithTenantTx(ctx, r.pool, shared.TenantID(tenantID.String()), func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `DELETE FROM auth.user_roles WHERE user_id = $1`, userID.String()); err != nil {
+		q := sqlcdb.New(tx)
+		uid := uuid.MustParse(userID.String())
+
+		if err := q.DeleteUserRoles(ctx, uid); err != nil {
 			return fmt.Errorf("delete user roles: %w", err)
 		}
 
-		// Batch insert all roles in a single multi-row query instead of looping.
-		if len(roleIDs) == 0 {
-			return nil
-		}
-
-		query := `INSERT INTO auth.user_roles (user_id, role_id, granted_at) VALUES `
-		args := make([]interface{}, 0, len(roleIDs)+1)
-		args = append(args, userID.String())
-
-		for i, roleID := range roleIDs {
-			if i > 0 {
-				query += `, `
+		for _, roleID := range roleIDs {
+			if err := q.InsertUserRole(ctx, sqlcdb.InsertUserRoleParams{
+				UserID: uid,
+				RoleID: uuid.MustParse(roleID.String()),
+			}); err != nil {
+				return fmt.Errorf("insert user role: %w", err)
 			}
-			argIdx := i + 2
-			query += fmt.Sprintf(`($1, $%d, NOW())`, argIdx)
-			args = append(args, roleID.String())
 		}
-
-		if _, err := tx.Exec(ctx, query, args...); err != nil {
-			return fmt.Errorf("insert user roles: %w", err)
-		}
-
 		return nil
 	})
 }

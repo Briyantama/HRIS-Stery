@@ -1,0 +1,23 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./internal/infrastructure/postgres/queries"
+    schema: "./migrations"
+    gen:
+      go:
+        out: "./internal/infrastructure/postgres/sqlc"
+        package: "sqlc"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "text"
+            nullable: true
+            go_type: "*string"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: "*time.Time"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true

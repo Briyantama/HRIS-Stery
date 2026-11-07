@@ -7,6 +7,7 @@
 ## Type Safety (No Escape Hatches)
 
 **❌ FORBIDDEN in domain types:**
+
 ```go
 type Employee struct {
     TenantID interface{}  // ❌ use TenantID value object
@@ -18,6 +19,7 @@ var db *sql.DB  // ❌ global state
 ```
 
 **✅ CORRECT:**
+
 ```go
 type Employee struct {
     tenantID TenantID     // private, accessed via method
@@ -51,6 +53,7 @@ func (e EmployeeID) Equals(other EmployeeID) bool { return e == other }
 ## RLS Context (WithTenantTx)
 
 **❌ FORBIDDEN: Raw connection for tenant-scoped queries**
+
 ```go
 func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id EmployeeID) (*Employee, error) {
     conn, _ := r.pool.Acquire(ctx)  // ❌ no RLS context set
@@ -60,6 +63,7 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 ```
 
 **✅ CORRECT: Use WithTenantTx for RLS context**
+
 ```go
 func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id EmployeeID) (*Employee, error) {
     var emp *Employee
@@ -75,6 +79,7 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 ## Error Handling
 
 **Checklist:**
+
 - [ ] Errors wrapped with context: `fmt.Errorf("describe operation: %w", err)`
 - [ ] gRPC handlers return status codes: `status.Errorf(codes.NotFound, "...")`
 - [ ] Domain errors defined in domain package
@@ -82,6 +87,7 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 - [ ] Sensitive data masked in error messages
 
 **✅ CORRECT:**
+
 ```go
 emp, err := r.repo.GetByID(ctx, tenantID, id)
 if err != nil {
@@ -95,6 +101,7 @@ if err != nil {
 ## Dependency Injection
 
 **❌ FORBIDDEN: Package-level variables**
+
 ```go
 var db *pgxpool.Pool  // ❌ global state
 var logger *zap.Logger  // ❌ global state
@@ -106,6 +113,7 @@ func init() {  // ❌ implicit initialization
 ```
 
 **✅ CORRECT: Constructor injection**
+
 ```go
 type EmployeeRepository struct {
     pool *pgxpool.Pool
@@ -120,6 +128,7 @@ func NewEmployeeRepository(pool *pgxpool.Pool, logger *zap.Logger) *EmployeeRepo
 ## Testing
 
 **Checklist:**
+
 - [ ] Unit tests for domain layer (no I/O)
 - [ ] Mock repositories in application tests
 - [ ] Table-driven tests for validation logic
