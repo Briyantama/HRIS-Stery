@@ -67,15 +67,17 @@ func (r *DocumentRepository) GetDocumentByID(ctx context.Context, tenantID domai
 
 // GetDocumentsByEntity retrieves the documents of an entity that the viewer may see, with pagination
 func (r *DocumentRepository) GetDocumentsByEntity(ctx context.Context, tenantID domain.TenantID, viewer domain.Viewer, entityType domain.EntityType, entityID string, limit, offset int) ([]*domain.DocumentFile, int, error) {
-	where, args := restrictTo(viewer, `tenant_id = $1 AND entity_type = $2 AND entity_id = $3`, []any{tenantID.String(), string(entityType), entityID})
+	where, args := restrictTo(viewer, `tenant_id = $1 AND status <> 'DELETED' AND entity_type = $2 AND entity_id = $3`, []any{tenantID.String(), string(entityType), entityID})
 	return r.list(ctx, tenantID, where, args, limit, offset)
 }
 
 // SearchDocuments searches the documents the viewer may see by file name, with pagination
 func (r *DocumentRepository) SearchDocuments(ctx context.Context, tenantID domain.TenantID, viewer domain.Viewer, query string, limit, offset int) ([]*domain.DocumentFile, int, error) {
-	where, args := restrictTo(viewer, `tenant_id = $1 AND file_name ILIKE $2`, []any{tenantID.String(), "%" + query + "%"})
+	where, args := restrictTo(viewer, `tenant_id = $1 AND status <> 'DELETED' AND file_name ILIKE $2 ESCAPE '\'`, []any{tenantID.String(), "%" + likeEscaper.Replace(query) + "%"})
 	return r.list(ctx, tenantID, where, args, limit, offset)
 }
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // restrictTo narrows a list query to what the viewer may see; it is domain.Viewer.CanView in SQL.
 func restrictTo(v domain.Viewer, where string, args []any) (string, []any) {
@@ -135,7 +137,11 @@ func scanDocument(row pgx.Row) (*domain.DocumentFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := domain.RehydrateDocumentFile(id, domain.MustNewTenantID(tenID), uploadedBy, domain.EntityType(entityType), entityID,
+	tenantID, err := domain.NewTenantID(tenID)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := domain.RehydrateDocumentFile(id, tenantID, uploadedBy, domain.EntityType(entityType), entityID,
 		fileName, mimeType, sizeBytes, bucket, objectKey, domain.FileStatus(status), domain.FileClassification(classification),
 		retentionDays, currentVersion, totalVersions, createdAt, updatedAt)
 	if err != nil {
@@ -160,7 +166,13 @@ func (r *DocumentRepository) SetVersions(ctx context.Context, tenantID domain.Te
 
 // DeleteDocument soft-deletes a document
 func (r *DocumentRepository) DeleteDocument(ctx context.Context, tenantID domain.TenantID, docID domain.DocumentID) error {
-	return r.UpdateDocumentStatus(ctx, tenantID, docID, domain.StatusDeleted)
+	err := r.exec(ctx, tenantID, "delete document",
+		`UPDATE document.files SET status = $1, updated_at = NOW() WHERE file_id = $2 AND tenant_id = $3 AND status <> $1`,
+		string(domain.StatusDeleted), docID.String(), tenantID.String())
+	if errors.Is(err, domain.ErrDocumentNotFound) { // the caller loaded the row, so a concurrent delete won
+		return domain.ErrDocumentDeleted
+	}
+	return err
 }
 
 func (r *DocumentRepository) exec(ctx context.Context, tenantID domain.TenantID, what, sql string, args ...any) error {

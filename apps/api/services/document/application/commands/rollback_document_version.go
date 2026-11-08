@@ -32,7 +32,10 @@ func NewRollbackDocumentVersionHandler(
 
 // Handle executes the rollback command
 func (h *RollbackDocumentVersionHandler) Handle(ctx context.Context, cmd RollbackDocumentVersionCommand) (*CreateDocumentVersionResult, error) {
-	tenantID := domain.MustNewTenantID(cmd.TenantID)
+	tenantID, err := domain.NewTenantID(cmd.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	docID, err := domain.NewDocumentIDFromString(cmd.DocumentID)
 	if err != nil {
 		return nil, domain.ErrDocumentNotFound

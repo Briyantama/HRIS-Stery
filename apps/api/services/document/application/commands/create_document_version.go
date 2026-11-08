@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
 )
@@ -36,7 +37,10 @@ func NewCreateDocumentVersionHandler(docRepo domain.DocumentRepository, versionR
 
 // Handle executes the create version command
 func (h *CreateDocumentVersionHandler) Handle(ctx context.Context, cmd CreateDocumentVersionCommand) (*CreateDocumentVersionResult, error) {
-	tenantID := domain.MustNewTenantID(cmd.TenantID)
+	tenantID, err := domain.NewTenantID(cmd.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	docID, err := domain.NewDocumentIDFromString(cmd.DocumentID)
 	if err != nil {
 		return nil, domain.ErrDocumentNotFound
@@ -66,6 +70,6 @@ func (h *CreateDocumentVersionHandler) Handle(ctx context.Context, cmd CreateDoc
 		VersionID:     version.ID().String(),
 		VersionNumber: nextVersionNumber,
 		DocumentID:    cmd.DocumentID,
-		CreatedAt:     version.CreatedAt().Format("2006-01-02T15:04:05Z"),
+		CreatedAt:     version.CreatedAt().UTC().Format(time.RFC3339),
 	}, nil
 }

@@ -52,7 +52,10 @@ func (h *GetDownloadURLHandler) Handle(ctx context.Context, q GetDownloadURLQuer
 	if secs > maxURLSeconds {
 		secs = maxURLSeconds
 	}
-	tenantID := domain.MustNewTenantID(q.TenantID)
+	tenantID, err := domain.NewTenantID(q.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	docID, err := domain.NewDocumentIDFromString(q.DocumentID)
 	if err != nil {
 		return nil, domain.ErrDocumentNotFound

@@ -46,10 +46,12 @@ func NewUploadDocumentHandler(docRepo domain.DocumentRepository, store objstore.
 	return &UploadDocumentHandler{docRepo: docRepo, store: store, bucket: bucket}
 }
 
-// Handle records the document, then signs the upload. If signing fails the metadata row is left
-// without an object; it stays UPLOADED and can be deleted like any other document.
+// Handle signs the upload, then records the document, so a signing failure leaves no orphan row.
 func (h *UploadDocumentHandler) Handle(ctx context.Context, cmd UploadDocumentCommand) (*UploadDocumentResult, error) {
-	tenantID := domain.MustNewTenantID(cmd.TenantID)
+	tenantID, err := domain.NewTenantID(cmd.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := uuid.Parse(cmd.EntityID); err != nil {
 		return nil, fmt.Errorf("%w: entity_id must be a uuid", domain.ErrInvalidInput)
 	}
@@ -64,12 +66,12 @@ func (h *UploadDocumentHandler) Handle(ctx context.Context, cmd UploadDocumentCo
 	if err != nil {
 		return nil, err
 	}
-	if err = h.docRepo.CreateDocument(ctx, doc); err != nil {
-		return nil, fmt.Errorf("create document: %w", err)
-	}
 	req, err := h.store.PresignPut(ctx, objectKey, cmd.MimeType, cmd.SizeBytes, UploadURLTTL)
 	if err != nil {
 		return nil, fmt.Errorf("presign upload: %w", err)
+	}
+	if err = h.docRepo.CreateDocument(ctx, doc); err != nil {
+		return nil, fmt.Errorf("create document: %w", err)
 	}
 	return &UploadDocumentResult{
 		DocumentID:      docID.String(),

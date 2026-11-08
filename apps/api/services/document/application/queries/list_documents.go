@@ -3,6 +3,7 @@ package queries
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
 	"github.com/google/uuid"
@@ -66,19 +67,21 @@ func toDTO(doc *domain.DocumentFile) DocumentDTO {
 		Classification: string(doc.Classification()),
 		CurrentVersion: doc.CurrentVersion(),
 		TotalVersions:  doc.TotalVersions(),
-		CreatedAt:      doc.CreatedAt().Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:      doc.UpdatedAt().Format("2006-01-02T15:04:05Z"),
+		CreatedAt:      doc.CreatedAt().UTC().Format(time.RFC3339),
+		UpdatedAt:      doc.UpdatedAt().UTC().Format(time.RFC3339),
 	}
 }
 
 // Handle executes the list query. The caller clamps PageSize and Offset; a search term wins over
 // the entity filter, and one of the two is required.
 func (h *ListDocumentsHandler) Handle(ctx context.Context, query ListDocumentsQuery) (*ListDocumentsResult, error) {
-	tenantID := domain.MustNewTenantID(query.TenantID)
+	tenantID, err := domain.NewTenantID(query.TenantID)
+	if err != nil {
+		return nil, err
+	}
 
 	var docs []*domain.DocumentFile
 	var total int
-	var err error
 	switch {
 	case query.Search != "":
 		docs, total, err = h.docRepo.SearchDocuments(ctx, tenantID, query.Viewer, query.Search, int(query.PageSize), int(query.Offset))

@@ -6,9 +6,13 @@ type TenantID struct {
 	value uuid.UUID
 }
 
-func MustNewTenantID(s string) TenantID {
-	id, _ := uuid.Parse(s)
-	return TenantID{value: id}
+// NewTenantID parses a tenant UUID; the nil UUID is rejected.
+func NewTenantID(s string) (TenantID, error) {
+	id, err := uuid.Parse(s)
+	if err != nil || id == uuid.Nil {
+		return TenantID{}, ErrInvalidTenantID
+	}
+	return TenantID{value: id}, nil
 }
 
 func (t TenantID) String() string { return t.value.String() }

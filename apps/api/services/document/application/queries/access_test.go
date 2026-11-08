@@ -46,7 +46,11 @@ var (
 func newDoc(t *testing.T, entityType domain.EntityType, entityID string, class domain.FileClassification) *domain.DocumentFile {
 	t.Helper()
 	id := domain.NewDocumentID()
-	doc, err := domain.NewDocumentFile(id, domain.MustNewTenantID(tenant), uuid.NewString(), entityType, entityID,
+	tid, err := domain.NewTenantID(tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := domain.NewDocumentFile(id, tid, uuid.NewString(), entityType, entityID,
 		"contract.pdf", "application/pdf", 1, "b", "k", class, 0)
 	if err != nil {
 		t.Fatal(err)

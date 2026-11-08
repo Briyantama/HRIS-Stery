@@ -3,6 +3,7 @@ package queries
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
 )
@@ -42,7 +43,10 @@ func NewGetDocumentMetadataHandler(docRepo domain.DocumentRepository, versionRep
 
 // Handle executes the metadata query
 func (h *GetDocumentMetadataHandler) Handle(ctx context.Context, query GetDocumentMetadataQuery) (*GetDocumentMetadataResult, error) {
-	tenantID := domain.MustNewTenantID(query.TenantID)
+	tenantID, err := domain.NewTenantID(query.TenantID)
+	if err != nil {
+		return nil, err
+	}
 	docID, err := domain.NewDocumentIDFromString(query.DocumentID)
 	if err != nil {
 		return nil, domain.ErrDocumentNotFound
@@ -51,7 +55,7 @@ func (h *GetDocumentMetadataHandler) Handle(ctx context.Context, query GetDocume
 	if err != nil {
 		return nil, err
 	}
-	if !query.Viewer.CanView(doc) {
+	if doc.IsDeleted() || !query.Viewer.CanView(doc) {
 		return nil, domain.ErrDocumentNotFound
 	}
 
@@ -67,7 +71,7 @@ func (h *GetDocumentMetadataHandler) Handle(ctx context.Context, query GetDocume
 				VersionNumber: v.VersionNumber(),
 				SizeBytes:     v.SizeBytes(),
 				CreatedBy:     v.CreatedBy(),
-				CreatedAt:     v.CreatedAt().Format("2006-01-02T15:04:05Z"),
+				CreatedAt:     v.CreatedAt().UTC().Format(time.RFC3339),
 			})
 		}
 	}
