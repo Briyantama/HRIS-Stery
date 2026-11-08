@@ -1,11 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(make validate-all *)",
-      "Bash(chmod +x /c/Users/solui/moon-eye/HRIS-Stery/scripts/migrate-helper.sh /c/Users/solui/moon-eye/HRIS-Stery/scripts/db-health.sh)",
-      "Bash(bash scripts/migrate-helper.sh list)",
-      "Bash(bash scripts/migrate-helper.sh verify)"
-    ],
+    "allow": [],
     "priority": "user",
     "allowedTools": [
       "Bash",
@@ -28,13 +23,9 @@
       "path": ".claude/skills/adr-review/SKILL.md",
       "description": "Check if ADR exists and is relevant before writing code"
     },
-    "proto-review": {
-      "path": ".claude/skills/proto-review/SKILL.md",
-      "description": "Verify proto contracts exist before implementing gRPC handlers"
-    },
     "migration-review": {
       "path": ".claude/skills/migration-review/SKILL.md",
-      "description": "Ensure migrations are reversible and have RLS on tenant-scoped tables"
+      "description": "Ensure goose migrations are reversible and have RLS on tenant-scoped tables"
     },
     "event-review": {
       "path": ".claude/skills/event-review/SKILL.md",
@@ -54,21 +45,13 @@
       "path": ".claude/agents/go-backend-reviewer.md",
       "trigger": "code review for Go services"
     },
-    "laravel-gateway-reviewer": {
-      "path": ".claude/agents/laravel-gateway-reviewer.md",
-      "trigger": "code review for Laravel gateway"
-    },
     "migration-reviewer": {
       "path": ".claude/agents/migration-reviewer.md",
       "trigger": "code review for database migrations"
     },
-    "event-nats-reviewer": {
-      "path": ".claude/agents/event-nats-reviewer.md",
-      "trigger": "code review for NATS event publishing/consumption"
-    },
-    "proto-reviewer": {
-      "path": ".claude/agents/proto-reviewer.md",
-      "trigger": "code review for proto files"
+    "event-stream-reviewer": {
+      "path": ".claude/agents/event-stream-reviewer.md",
+      "trigger": "code review for Dragonfly stream event publishing/consumption"
     }
   },
   "decisionTree": {
@@ -77,49 +60,48 @@
   },
   "repository": {
     "name": "HRIS-Stery",
-    "description": "Multi-tenant HRIS system with Go services, Laravel gateway, SvelteKit frontend",
+    "description": "Multi-tenant HRIS: one Go API module (apps/api) and a SvelteKit frontend",
     "rulesFile": "CLAUDE.md",
     "adrDirectory": "docs/adr/",
-    "protoDirectory": "proto/hris/",
     "services": [
       {
-        "name": "auth-service",
+        "name": "auth",
         "status": "LOCKED (M1 complete)",
         "schema": "auth",
         "phase": "M1"
       },
       {
-        "name": "employee-service",
+        "name": "employee",
         "status": "LOCKED (M1 complete)",
         "schema": "employee",
         "phase": "M1"
       },
       {
-        "name": "attendance-service",
+        "name": "attendance",
         "status": "Planned",
         "schema": "attendance",
         "phase": "M2"
       },
       {
-        "name": "leave-service",
+        "name": "leave",
         "status": "Planned",
         "schema": "leave",
         "phase": "M2"
       },
       {
-        "name": "notification-service",
+        "name": "notification",
         "status": "Planned",
         "schema": "notification",
         "phase": "M2"
       },
       {
-        "name": "audit-service",
+        "name": "audit",
         "status": "Planned",
         "schema": "audit",
         "phase": "M2"
       },
       {
-        "name": "document-service",
+        "name": "document",
         "status": "Planned",
         "schema": "document",
         "phase": "M2"

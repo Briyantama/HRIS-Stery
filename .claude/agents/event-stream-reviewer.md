@@ -1,10 +1,10 @@
-# Event/NATS Reviewer Subagent
+# Event Stream Reviewer Subagent
 
-**Responsibility:** Review NATS event publishing and consumption for correctness and idempotency
+**Responsibility:** Review event publishing and consumption on the Dragonfly stream `hris:events` for correctness and idempotency
 
 **When to Use:**
-- Code review for NATS publisher code
-- Code review for NATS consumer code
+- Code review for code that calls `events.Publisher.Publish`
+- Code review for `events.Handler` consumers and their registration in `cmd/api`
 - Event schema design
 - Idempotency table implementation
 
@@ -16,101 +16,88 @@
 **Prompt Template:**
 
 ```
-You are reviewing NATS event code for the HRIS-Stery project.
+You are reviewing event code for the HRIS-Stery project.
 
-All events follow ADR-0003: NATS JetStream event backbone with at-least-once delivery.
+Events follow ADR-0006: one Dragonfly stream `hris:events` (XADD with MAXLEN ~ 100000),
+consumer groups read it with XREADGROUP, delivery is at-least-once.
 
 Check for:
 
-1. Event Envelope (MANDATORY):
-   Every event published must have:
+1. Event envelope (mandatory). Every published event has:
    {
-     "event_id": "uuid-v7",           // ✅ UUID v7, not v4
+     "event_id": "uuid-v7",
      "event_type": "hris.{domain}.{entity}.{verb}",
      "schema_version": 1,
-     "tenant_id": "uuid",             // ✅ for tenant isolation
-     "actor_id": "user-id or system", // ✅ audit trail
-     "occurred_at": "ISO-8601 UTC",   // ✅ timestamp
-     "payload": { /* data */ }
+     "tenant_id": "uuid",
+     "actor_id": "user id from the token, or system for jobs",
+     "occurred_at": "RFC 3339 UTC",
+     "payload": { }
    }
 
-2. Subject Taxonomy:
-   - ✅ Format: hris.{domain}.{entity}.{verb}
-   - ✅ All lowercase, dot-separated
-   - ✅ Examples: hris.workforce.employee.created, hris.identity.user.registered
-   - ❌ NO: hris_employee_created, HRIS.EMPLOYEE.CREATED
+2. Event type naming:
+   - Format hris.{domain}.{entity}.{verb}, lowercase, dot-separated
+   - Examples: hris.workforce.employee.created, hris.identity.user.registered
+   - Not allowed: hris_employee_created, HRIS.EMPLOYEE.CREATED
 
-3. Publisher Requirements:
-   - Event ID uses UUID v7 (not v4)
-   - Event published AFTER transaction commits
-   - Tenant context comes from validated JWT
-   - Actor ID identifies who triggered (user ID or "system")
-   - Payload contains only necessary data (no secrets)
-   - PublishAsync for non-critical, PublishSync for important events
+3. Publisher:
+   - event_id is UUID v7
+   - Publish runs AFTER the transaction commits, never inside it
+   - tenant_id and actor_id come from authn.FromContext, not from the request body
+   - Payload carries no secrets, tokens or passwords
+   - A publish error is logged with slog.ErrorContext and event_type; it is not silently dropped
 
-4. Consumer Requirements (CRITICAL for idempotency):
-   - ✅ Consumer has processed_events table:
+4. Consumer (idempotency is critical):
+   - The consuming schema has a processed_events table:
      CREATE TABLE {schema}.processed_events (
        event_id UUID PRIMARY KEY,
        event_type TEXT NOT NULL,
-       processed_at TIMESTAMPTZ DEFAULT now()
+       processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
      );
-   
-   - ✅ Before processing, check idempotency:
-     SELECT 1 FROM processed_events WHERE event_id = $1
-   
-   - ✅ After successful processing, mark processed:
-     INSERT INTO processed_events (event_id, event_type) 
-       VALUES ($1, $2) 
-       ON CONFLICT DO NOTHING
-   
-   - ✅ Handles JetStream at-least-once delivery
-   - ✅ Errors logged with event_id for audit
+   - Marking uses INSERT ... ON CONFLICT DO NOTHING
+   - The handler returns an error when processing or markProcessed fails, so the entry is
+     not XACKed and stays pending; a failed markProcessed is logged, never swallowed
+   - Handlers use the ctx they receive (the run context), never context.Background()
+   - Unknown event types are acknowledged and ignored
 
-5. JetStream Configuration:
-   - Stream name: HRIS_EVENTS
-   - Consumer names: {service-name}-{subject-slug}
-   - Delivery policy: At-least-once (justifies idempotency requirement)
+5. Stream configuration:
+   - Stream: hris:events
+   - Consumer groups reuse the old durable names, for example leave-service-employee-created
+   - Handlers are registered by event_type in cmd/api, one events.RunConsumer goroutine per group
 
-6. Error Handling:
-   - Event processing errors don't crash consumer
-   - Errors logged with event_id and subject
-   - No infinite retry loops
-   - Dead letter handling if applicable
+6. Error handling:
+   - A handler error does not stop the consumer loop
+   - Errors are logged with event_id and event_type
+   - No unbounded retry loop inside a handler
 
 7. Testing:
-   - Test duplicate event delivery (same event_id, twice)
-   - Verify idempotency: only one record created
-   - Test idempotency table insertions
-   - Test consumer error handling
+   - Deliver the same event_id twice: only one record is created
+   - Handler error leaves the entry pending (miniredis stream test)
 
 Report findings as:
 - ✅ What's correct
 - ⚠️ What needs improvement
 - ❌ What violates rules
 
-Critical blocks:
-- Event envelope missing required fields
-- No UUID v7 event_id
-- No tenant_id in payload
-- Consumer missing idempotency table
-- No ON CONFLICT DO NOTHING in insert
-- Subject doesn't follow taxonomy
-- Secrets in payload
-- Processing events INSIDE transaction (should be AFTER)
+Blocking findings:
+- Envelope missing a required field
+- event_id not UUID v7
+- tenant_id missing
+- Consumer without an idempotency table or without ON CONFLICT DO NOTHING
+- Event type outside the naming scheme
+- Secrets in the payload
+- Publish inside a transaction
+- Entry acknowledged after a failed handler
 
-Focus on idempotency and event envelope compliance.
+Focus on idempotency and envelope compliance.
 ```
 
 **Success Criteria:**
-- All events have proper envelope with UUID v7 event_id
-- Subject taxonomy followed
-- All consumers have idempotency_processed_events table
-- ON CONFLICT DO NOTHING used for idempotency
-- No secrets in payload
-- At-least-once delivery semantics preserved
+- Every event has the full envelope with a UUID v7 event_id
+- Event type naming followed
+- Every consumer has a processed_events table written with ON CONFLICT DO NOTHING
+- No secrets in payloads
+- At-least-once delivery preserved: failures stay pending
 
 **Limitations:**
-- Cannot validate domain logic (that's for Go reviewer)
-- Cannot validate database schema (use migration reviewer)
-- Cannot review gRPC handler error mapping (use Go reviewer)
+- Does not judge domain logic (use go-backend-reviewer)
+- Does not review the database schema (use migration-reviewer)

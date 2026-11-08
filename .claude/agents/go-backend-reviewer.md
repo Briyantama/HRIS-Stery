@@ -3,7 +3,7 @@
 **Responsibility:** Review Go code changes for architectural correctness and repository rules
 
 **When to Use:** 
-- Code review for any `.go` file changes in `services/*/internal/`
+- Code review for any `.go` file changes in `apps/api/`
 - Architecture validation for domain, application, and infrastructure layers
 - RLS enforcement verification
 - Type safety and value object usage checks
@@ -23,7 +23,7 @@ Check for:
    - Domain: Pure logic, no I/O
    - Application: Orchestration, uses domain + repositories
    - Infrastructure: I/O, implements ports
-   - Interfaces: Thin, delegates to application
+   - http.go: Thin, decodes with httpx.DecodeJSON, answers with httpx.WriteSuccess/WriteError, delegates to application
 
 2. Type Safety:
    - No interface{} or any in domain types
@@ -32,23 +32,23 @@ Check for:
 
 3. RLS Enforcement:
    - Tenant-scoped queries use WithTenantTx()
-   - Tenant context comes from domain/application, not user input
+   - Tenant and actor ids come from authn.FromContext, never from the request body
    - processed_events table has no RLS (system table)
 
 4. Dependency Injection:
-   - All DB, NATS, cache dependencies injected via constructor
+   - DB pool, Redis client and event publisher injected via Deps/constructors
    - No init() functions
    - No package-level state
 
 5. Error Handling:
    - Errors wrapped with context
-   - gRPC handlers return correct status codes
+   - http.go maps domain errors to 400/404/409/422/403 and everything else to 500 "internal error"
    - No secrets in error messages
 
 6. Testing:
    - Domain logic has unit tests
    - Repositories mocked in application tests
-   - Integration tests have //go:build integration tag
+   - DB tests use testdb.NewMigratedURL(t) (no build tag; they skip without TEST_DATABASE_URL)
 
 Report findings as:
 - ✅ What's correct
@@ -68,4 +68,4 @@ Focus on architectural integrity — don't nitpick style unless it affects corre
 **Limitations:**
 - Cannot judge business logic correctness (that's for domain experts)
 - Cannot validate database schema (use migration-review skill)
-- Cannot validate proto contracts (use proto-review skill)
+- Cannot validate event envelopes (use event-stream-reviewer)

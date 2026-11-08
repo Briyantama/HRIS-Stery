@@ -67,9 +67,9 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 ```go
 func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id EmployeeID) (*Employee, error) {
     var emp *Employee
-    err := shared.WithTenantTx(ctx, r.pool, tenantID, func(ctx context.Context, tx pgx.Tx) error {
-        // RLS context set automatically before this point
-        query := `SELECT ... FROM employees WHERE id = $1`
+    err := pgtenant.WithTenantTx(ctx, r.pool, tenantID.String(), "", func(tx pgx.Tx) error {
+        // app.tenant_id is set with set_config(..., true) before this point
+        query := `SELECT ... FROM employee.employees WHERE id = $1`
         return scanEmployee(tx.QueryRow(ctx, query, id.String()), &emp)
     })
     return emp, err
@@ -81,7 +81,7 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 **Checklist:**
 
 - [ ] Errors wrapped with context: `fmt.Errorf("describe operation: %w", err)`
-- [ ] gRPC handlers return status codes: `status.Errorf(codes.NotFound, "...")`
+- [ ] `http.go` maps domain errors to HTTP status codes and answers through `httpx.WriteError`
 - [ ] Domain errors defined in domain package
 - [ ] No stack traces in logs
 - [ ] Sensitive data masked in error messages
@@ -89,13 +89,17 @@ func (r *EmployeeRepository) GetByID(ctx context.Context, tenantID TenantID, id 
 **✅ CORRECT:**
 
 ```go
-emp, err := r.repo.GetByID(ctx, tenantID, id)
-if err != nil {
-    if err == ErrNotFound {
-        return nil, status.Error(codes.NotFound, "employee not found")
-    }
-    return nil, status.Error(codes.Internal, "database error")
+result, err := h.getEmployee.Handle(ctx, queries.GetEmployeeQuery{TenantID: claims.TenantID, ID: id})
+if errors.Is(err, domain.ErrNotFound) {
+    httpx.WriteError(w, http.StatusNotFound, "employee not found")
+    return
 }
+if err != nil {
+    slog.ErrorContext(ctx, "get employee", "tenant_id", claims.TenantID, "err", err)
+    httpx.WriteError(w, http.StatusInternalServerError, "internal error")
+    return
+}
+httpx.WriteSuccess(w, http.StatusOK, result)
 ```
 
 ## Dependency Injection
@@ -104,7 +108,7 @@ if err != nil {
 
 ```go
 var db *pgxpool.Pool  // ❌ global state
-var logger *zap.Logger  // ❌ global state
+var rdb *redis.Client   // ❌ global state
 
 func init() {  // ❌ implicit initialization
     var err error
@@ -117,11 +121,10 @@ func init() {  // ❌ implicit initialization
 ```go
 type EmployeeRepository struct {
     pool *pgxpool.Pool
-    logger *zap.Logger
 }
 
-func NewEmployeeRepository(pool *pgxpool.Pool, logger *zap.Logger) *EmployeeRepository {
-    return &EmployeeRepository{pool: pool, logger: logger}
+func NewEmployeeRepository(pool *pgxpool.Pool) *EmployeeRepository {
+    return &EmployeeRepository{pool: pool}
 }
 ```
 
@@ -132,7 +135,7 @@ func NewEmployeeRepository(pool *pgxpool.Pool, logger *zap.Logger) *EmployeeRepo
 - [ ] Unit tests for domain layer (no I/O)
 - [ ] Mock repositories in application tests
 - [ ] Table-driven tests for validation logic
-- [ ] Integration tests with `//go:build integration` tag
+- [ ] DB tests use `testdb.NewMigratedURL(t)` in an external `_test` package
 - [ ] No direct DB access in unit tests
 
 ## Code Review Checklist
@@ -142,7 +145,7 @@ func NewEmployeeRepository(pool *pgxpool.Pool, logger *zap.Logger) *EmployeeRepo
 - [ ] All I/O dependencies injected via constructor
 - [ ] All tenant-scoped queries use `WithTenantTx()`
 - [ ] Error wrapping with context
-- [ ] gRPC errors use correct status codes
+- [ ] HTTP errors use the status code table in CLAUDE.md
 - [ ] Tests for domain logic (domain package tests)
 - [ ] Comments explain WHY, not WHAT
 
