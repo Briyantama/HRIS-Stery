@@ -273,7 +273,11 @@ func (e *Employee) IsTerminated() bool {
 // Terminate marks the employee as terminated.
 func (e *Employee) Terminate(terminationDate time.Time) error {
 	if e.IsTerminated() {
-		return fmt.Errorf("employee is already terminated")
+		return fmt.Errorf("employee is already terminated: %w", ErrConflict)
+	}
+	// Compare calendar days: a date-only termination on the join day parses to midnight.
+	if terminationDate.UTC().Truncate(24 * time.Hour).Before(e.joinDate.UTC().Truncate(24 * time.Hour)) {
+		return fmt.Errorf("%w: termination date is before join date", ErrInvalid)
 	}
 	e.status = StatusTerminated
 	e.terminationDate = &terminationDate

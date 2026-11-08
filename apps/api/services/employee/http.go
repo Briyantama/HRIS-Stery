@@ -221,9 +221,14 @@ func (h *HTTPHandler) handleListEmployees(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid pagination")
 		return
 	}
+	search := r.URL.Query().Get("search")
+	if len(search) > 100 {
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "search too long")
+		return
+	}
 	q := queries.ListEmployeesQuery{
 		TenantID:   claims.TenantID,
-		SearchText: r.URL.Query().Get("search"),
+		SearchText: search,
 		Limit:      int32(perPage),
 		Offset:     int32((pageNo - 1) * perPage),
 	}

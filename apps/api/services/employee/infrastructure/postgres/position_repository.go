@@ -36,6 +36,9 @@ func (r *PositionRepository) Create(ctx context.Context, position *domain.Positi
 			string(position.Level()),
 		)
 		if err != nil {
+			if isUniqueViolation(err) {
+				return fmt.Errorf("position title already exists: %w", domain.ErrConflict)
+			}
 			return fmt.Errorf("insert position: %w", err)
 		}
 		return nil

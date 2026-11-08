@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/employee/domain"
@@ -345,11 +346,14 @@ func employeeWhere(tenantID domain.TenantID, filters domain.EmployeeFilters) (st
 		where += fmt.Sprintf(" AND department_id = $%d", len(args))
 	}
 	if filters.SearchText != "" {
-		args = append(args, "%"+filters.SearchText+"%")
+		args = append(args, "%"+likeEscaper.Replace(filters.SearchText)+"%")
 		where += fmt.Sprintf(" AND (full_name ILIKE $%d OR email ILIKE $%d)", len(args), len(args))
 	}
 	return where, args
 }
+
+// likeEscaper neutralises LIKE metacharacters (backslash is Postgres' default escape).
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // isUniqueViolation reports whether err is a Postgres unique constraint violation.
 func isUniqueViolation(err error) bool {

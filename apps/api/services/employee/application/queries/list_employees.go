@@ -79,14 +79,6 @@ func (h *ListEmployeesHandler) Handle(ctx context.Context, query ListEmployeesQu
 		filters.DepartmentID = &deptID
 	}
 
-	// Set defaults
-	if filters.Limit == 0 {
-		filters.Limit = 50
-	}
-	if filters.Limit > 1000 {
-		filters.Limit = 1000
-	}
-
 	// Fetch employees
 	employees, err := h.employeeRepo.ListByTenant(ctx, tenantID, filters)
 	if err != nil {

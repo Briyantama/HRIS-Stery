@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -128,6 +129,16 @@ func TestEmployeeTerminate(t *testing.T) {
 	// Cannot terminate twice
 	if err := emp.Terminate(now); err == nil {
 		t.Errorf("expected error when terminating already terminated employee")
+	}
+}
+
+func TestEmployeeTerminateBeforeJoinDate(t *testing.T) {
+	emp, _ := NewEmployee(MustNewTenantID("550e8400-e29b-41d4-a716-446655440000"), "john@example.com", "John Doe", GenerateDepartmentID(), GeneratePositionID())
+	if err := emp.Terminate(time.Now().UTC().AddDate(0, 0, -2)); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected ErrInvalid, got %v", err)
+	}
+	if emp.IsTerminated() {
+		t.Errorf("rejected termination must not change status")
 	}
 }
 

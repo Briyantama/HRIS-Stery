@@ -91,7 +91,6 @@ func (c *UserRegistered) Handle(ctx context.Context, env events.Envelope) error 
 		FullName:     p.FullName,
 		DepartmentID: deptID,
 		PositionID:   posID,
-		ContractType: string(domain.ContractPermanent),
 		ActorID:      "system",
 	})
 	// An existing employee with this email means an earlier delivery already did the work.

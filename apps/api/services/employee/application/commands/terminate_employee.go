@@ -69,7 +69,7 @@ func (h *TerminateEmployeeHandler) Handle(ctx context.Context, cmd TerminateEmpl
 
 	// Terminate employee
 	if err := employee.Terminate(cmd.TerminationDate); err != nil {
-		return nil, fmt.Errorf("terminate employee: %w: %w", domain.ErrConflict, err)
+		return nil, fmt.Errorf("terminate employee: %w", err)
 	}
 
 	// Persist

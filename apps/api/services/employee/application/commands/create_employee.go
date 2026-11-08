@@ -19,7 +19,6 @@ type CreateEmployeeCommand struct {
 	DepartmentID string
 	PositionID   string
 	ManagerID    string
-	ContractType string
 	ActorID      string
 }
 
@@ -92,7 +91,10 @@ func (h *CreateEmployeeHandler) Handle(ctx context.Context, cmd CreateEmployeeCo
 	}
 
 	// Email must be unique within the tenant.
-	existing, _ := h.employeeRepo.GetByTenantAndEmail(ctx, tenantID, cmd.Email)
+	existing, err := h.employeeRepo.GetByTenantAndEmail(ctx, tenantID, cmd.Email)
+	if err != nil {
+		return nil, fmt.Errorf("check email: %w", err)
+	}
 	if existing != nil {
 		return nil, fmt.Errorf("email already exists for this tenant: %w", domain.ErrConflict)
 	}
@@ -117,10 +119,14 @@ func (h *CreateEmployeeHandler) Handle(ctx context.Context, cmd CreateEmployeeCo
 		return nil, fmt.Errorf("%w: %w", domain.ErrInvalid, err)
 	}
 	if cmd.Phone != "" {
-		_ = employee.SetPhoneNumber(cmd.Phone)
+		if err = employee.SetPhoneNumber(cmd.Phone); err != nil {
+			return nil, fmt.Errorf("%w: %w", domain.ErrInvalid, err)
+		}
 	}
 	if managerID != nil {
-		_ = employee.SetManager(managerID)
+		if err = employee.SetManager(managerID); err != nil {
+			return nil, fmt.Errorf("%w: %w", domain.ErrInvalid, err)
+		}
 	}
 
 	if err := h.employeeRepo.Create(ctx, employee); err != nil {
