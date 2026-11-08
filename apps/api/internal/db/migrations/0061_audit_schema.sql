@@ -3,7 +3,7 @@
 -- Migration: 001_create_audit_schema (audit service)
 -- Schema:    audit (created in 0001_bootstrap; role hris_app too)
 -- ============================================================
--- Immutable, append-only audit entries. RLS is disabled on audit.entries.
+-- Immutable, append-only audit entries. RLS is enabled in 0062.
 -- INSERT-ONLY: the application role gets no UPDATE or DELETE.
 -- ============================================================
 
