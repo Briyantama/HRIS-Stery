@@ -9,9 +9,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # Password for the RLS-bound hris_app role; set it in .env. deploy/docker/init-postgres.sh passes it
+      # to the .sql as a psql variable (init runs once, on an empty volume), so it is never committed.
+      HRIS_APP_PASSWORD: ${HRIS_APP_PASSWORD:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./deploy/docker/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql:ro
+      - ./deploy/docker/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
+      # Outside initdb.d so the entrypoint does not run the raw .sql itself.
+      - ./deploy/docker/init-postgres.sql:/opt/init-postgres.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
@@ -62,6 +67,19 @@ services:
         aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket hris-documents
         || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket hris-documents
 
+  # Schema migrations run as the owner/superuser; the api itself connects as the RLS-bound hris_app role.
+  migrate:
+    build:
+      context: ..
+      dockerfile: HRIS-Stery/apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+    restart: "no"
+
   api:
     build:
       context: ..
@@ -73,10 +91,12 @@ services:
         condition: service_healthy
       rustfs-init:
         condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
     env_file: .env
     environment:
       PORT: "8000"
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      DATABASE_URL: postgres://hris_app:${HRIS_APP_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
       REDIS_ADDR: dragonfly:6379
       S3_ENDPOINT: http://rustfs:9000
     ports:
