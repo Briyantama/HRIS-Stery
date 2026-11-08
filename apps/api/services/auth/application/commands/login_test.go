@@ -36,7 +36,7 @@ func (m *MockTenantRepository) GetBySlug(ctx context.Context, slug string) (*dom
 			return t, nil
 		}
 	}
-	return nil, fmt.Errorf("tenant not found")
+	return nil, fmt.Errorf("tenant not found: %w", domain.ErrNotFound)
 }
 
 func (m *MockTenantRepository) Update(ctx context.Context, tenant *domain.Tenant) error {
@@ -82,7 +82,7 @@ func (m *MockUserRepository) GetByTenantAndEmail(ctx context.Context, tenantID d
 			return u, nil
 		}
 	}
-	return nil, fmt.Errorf("user not found")
+	return nil, fmt.Errorf("user not found: %w", domain.ErrNotFound)
 }
 
 func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {

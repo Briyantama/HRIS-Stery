@@ -63,7 +63,7 @@ func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*domain.
 	q := sqlcdb.New(r.pool)
 	row, err := q.GetTenantBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("tenant not found")
+		return nil, fmt.Errorf("tenant not found: %w", domain.ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query tenant by slug: %w", err)

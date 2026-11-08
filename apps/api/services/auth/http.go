@@ -163,7 +163,7 @@ func (h *HTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		AdminPassword: body.AdminPassword, AdminName: body.AdminName,
 	})
 	if err != nil {
-		fail(w, r, err, "unauthorized")
+		fail(w, r, err, "registration failed")
 		return
 	}
 	httpx.WriteSuccess(w, http.StatusCreated, map[string]string{

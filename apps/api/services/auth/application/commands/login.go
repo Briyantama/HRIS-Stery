@@ -2,10 +2,15 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// dummyHash is compared against when the user is unknown so that response time does not reveal which emails exist.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password"), bcrypt.DefaultCost)
 
 // LoginCommand represents a user login attempt.
 type LoginCommand struct {
@@ -61,6 +66,9 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 	// Tenant lookup
 	tenant, err := h.tenantRepo.GetBySlug(ctx, cmd.TenantSlug)
 	if err != nil {
+		if !errors.Is(err, domain.ErrNotFound) {
+			return nil, fmt.Errorf("lookup tenant: %w", err)
+		}
 		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "tenant_not_found", cmd.IPAddr)
 		return nil, fmt.Errorf("tenant not found: %w", domain.ErrUnauthenticated)
 	}
@@ -73,6 +81,10 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 	// User lookup
 	user, err := h.userRepo.GetByTenantAndEmail(ctx, tenant.ID(), cmd.Email)
 	if err != nil {
+		if !errors.Is(err, domain.ErrNotFound) {
+			return nil, fmt.Errorf("lookup user: %w", err)
+		}
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(cmd.Password))
 		h.publishLoginFailed(ctx, cmd.Email, cmd.TenantSlug, "user_not_found", cmd.IPAddr)
 		return nil, fmt.Errorf("invalid credentials: %w", domain.ErrUnauthenticated)
 	}
