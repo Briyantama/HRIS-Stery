@@ -1,16 +1,10 @@
 <script lang="ts">
+	import { derived } from 'svelte/store';
 	import { user } from '$lib/stores/auth';
 	import { useLeaveBalance, useLeaveTypes } from '$lib/queries/leave';
 	import { Alert, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@stery/kit/ui';
 
-	// Get current user ID from store
-	let userId: string | null = null;
-	user.subscribe((u) => {
-		userId = u?.user_id ?? null;
-	});
-
-	// Fetch leave balance
-	$: leaveBalance = useLeaveBalance(userId);
+	const leaveBalance = useLeaveBalance(derived(user, (u) => u?.user_id ?? null));
 
 	// The balance only carries leave_type_id; names and codes come from the tenant's leave types.
 	const leaveTypes = useLeaveTypes();
@@ -18,7 +12,7 @@
 
 	// Get badge color based on remaining days
 	function getRemainingDaysColor(remaining: number, entitled: number): string {
-		const percentage = (remaining / entitled) * 100;
+		const percentage = entitled > 0 ? (remaining / entitled) * 100 : 0;
 		if (percentage > 50) return 'bg-success/15 text-success';
 		if (percentage > 25) return 'bg-warning/15 text-warning';
 		return 'bg-destructive/10 text-destructive';
@@ -112,9 +106,12 @@
 								<div class="h-2 overflow-hidden rounded-full bg-muted">
 									<div
 										class="h-full bg-primary transition-all"
-										style="width: {((typeBalance.used_days + typeBalance.pending_days) /
-											typeBalance.entitled_days) *
-											100}%"
+										style="width: {typeBalance.entitled_days > 0
+											? Math.min(
+													100,
+													((typeBalance.used_days + typeBalance.pending_days) / typeBalance.entitled_days) * 100
+												)
+											: 0}%"
 									></div>
 								</div>
 								<p class="text-right text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import { createQuery, createMutation } from '@tanstack/svelte-query';
+import { derived, type Readable } from 'svelte/store';
 import { apiGet, apiPost } from '$lib/api/client';
 import type {
 	LeaveBalance,
@@ -10,13 +11,17 @@ import type {
 
 /** TanStack Query hooks for leave management. Each call returns the API envelope's data. */
 
-export function useLeaveBalance(employeeId: string | null, year?: number) {
-	return createQuery({
-		queryKey: ['leave-balance', employeeId, year],
-		queryFn: () =>
-			apiGet<LeaveBalance>(`/leave-balance/${encodeURIComponent(employeeId!)}`, { query: { year } }),
-		enabled: !!employeeId
-	});
+// Hooks must be called during component init (createQuery reads the QueryClient context); reactive
+// inputs are passed as stores so the one observer updates its options instead of being recreated.
+export function useLeaveBalance(employeeId: Readable<string | null>, year?: number) {
+	return createQuery(
+		derived(employeeId, ($id) => ({
+			queryKey: ['leave-balance', $id, year],
+			queryFn: () =>
+				apiGet<LeaveBalance>(`/leave-balance/${encodeURIComponent($id!)}`, { query: { year } }),
+			enabled: !!$id
+		}))
+	);
 }
 
 export function useLeaveTypes() {
@@ -26,19 +31,23 @@ export function useLeaveTypes() {
 	});
 }
 
-export function useLeaveRequests(filters?: {
-	employee_id?: string;
-	status?: string;
-	page?: number;
-	per_page?: number;
-}) {
-	return createQuery({
-		queryKey: ['leave-requests', filters],
-		queryFn: () =>
-			apiGet<ListLeaveRequestsResponse>('/leaves', {
-				query: { ...filters, per_page: filters?.per_page ?? 50 }
-			})
-	});
+export function useLeaveRequests(
+	filters: Readable<{
+		employee_id?: string;
+		status?: string;
+		page?: number;
+		per_page?: number;
+	}>
+) {
+	return createQuery(
+		derived(filters, ($f) => ({
+			queryKey: ['leave-requests', $f],
+			queryFn: () =>
+				apiGet<ListLeaveRequestsResponse>('/leaves', {
+					query: { ...$f, per_page: $f.per_page ?? 50 }
+				})
+		}))
+	);
 }
 
 export function useLeaveRequest(leaveId: string | null) {

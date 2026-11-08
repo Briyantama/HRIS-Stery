@@ -9,6 +9,8 @@ import { createClient, type RequestOptions } from '@stery/kit';
 const client = createClient('/api', {
 	onUnauthorized: () => {
 		if (typeof window !== 'undefined') {
+			// no base path; the query string makes resolve() unusable here
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			void goto('/login?redirect=' + encodeURIComponent(location.pathname + location.search));
 		}
 	}

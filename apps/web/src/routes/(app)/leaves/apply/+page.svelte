@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { useLeaveTypes, useApplyLeave } from '$lib/queries/leave';
 	import { ApplyLeaveRequestSchema, type ApplyLeaveForm } from '$lib/schemas/leave';
 	import { getErrorMessage } from '$lib/api/client';
@@ -113,7 +114,7 @@
 
 			// Redirect to dashboard after a brief moment
 			setTimeout(() => {
-				goto('/dashboard');
+				goto(resolve('/dashboard'));
 			}, 1500);
 		} catch (error) {
 			generalError = getErrorMessage(error);
@@ -278,7 +279,7 @@
 					<Button
 						type="button"
 						variant="outline"
-						onclick={() => goto('/dashboard')}
+						onclick={() => goto(resolve('/dashboard'))}
 						disabled={$applyLeave.isPending}
 					>
 						Cancel

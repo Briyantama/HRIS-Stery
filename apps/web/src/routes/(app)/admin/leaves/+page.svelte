@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { writable } from 'svelte/store';
 	import { isManager } from '$lib/stores/auth';
 	import { useLeaveRequests, useApproveLeave, useRejectLeave } from '$lib/queries/leave';
 	import { RejectLeaveFormSchema } from '$lib/schemas/leave';
@@ -38,7 +39,9 @@
 	let statusFilter: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
 
 	// Fetch leave requests based on status filter
-	$: leaveRequests = useLeaveRequests({ status: statusFilter });
+	const filters = writable<{ status: string }>({ status: statusFilter });
+	$: filters.set({ status: statusFilter });
+	const leaveRequests = useLeaveRequests(filters);
 
 	// Toast state
 	let showSuccessToast = false;
@@ -129,7 +132,8 @@
 	 * Format date for display
 	 */
 	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
+		// date-only strings parse as UTC midnight and render a day early west of UTC; read them as local
+		const date = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00` : dateStr);
 		return date.toLocaleDateString('en-US', {
 			year: 'numeric',
 			month: 'short',
@@ -209,7 +213,7 @@
 				{ label: 'Pending', value: 'PENDING' as const },
 				{ label: 'Approved', value: 'APPROVED' as const },
 				{ label: 'Rejected', value: 'REJECTED' as const }
-			] as tab}
+			] as tab (tab.value)}
 				<button
 					on:click={() => (statusFilter = tab.value)}
 					class={`px-4 py-2 font-medium transition-colors ${

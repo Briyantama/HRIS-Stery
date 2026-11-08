@@ -15,6 +15,7 @@ function claimsFromToken(token: string): App.Locals['user'] | null {
 		const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
 		const c = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))));
 		if (!c?.user_id || !c.tenant_id) return null;
+		if (typeof c.exp === 'number' && c.exp * 1000 <= Date.now()) return null;
 		return { user_id: c.user_id, tenant_id: c.tenant_id, email: c.email, roles: Array.isArray(c.roles) ? c.roles : [] };
 	} catch {
 		return null;
