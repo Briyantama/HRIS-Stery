@@ -48,14 +48,12 @@ if has go; then
 fi
 
 if has web; then
-  for app in apps/web; do
-    echo "==> Web ($app): check"
-    (cd "$app" && npm run check)
-    if grep -q '"test:unit"' "$app/package.json"; then
-      echo "==> Web ($app): test:unit"
-      (cd "$app" && npm run test:unit)
-    fi
-  done
+  echo "==> Web: check"
+  (cd apps/web && npm run check)
+  if grep -q '"test:unit"' apps/web/package.json; then
+    echo "==> Web: test:unit"
+    (cd apps/web && npm run test:unit)
+  fi
 fi
 
 echo "All checks passed (stages: $STAGES)."
