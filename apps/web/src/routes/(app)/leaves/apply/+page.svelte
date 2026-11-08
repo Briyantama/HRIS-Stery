@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { user } from '$lib/stores/auth';
 	import { useLeaveTypes, useApplyLeave } from '$lib/queries/leave';
 	import { ApplyLeaveRequestSchema, type ApplyLeaveForm } from '$lib/schemas/leave';
 	import { getErrorMessage } from '$lib/api/client';
@@ -19,12 +18,6 @@
 	} from '@stery/kit/ui';
 	import { CircleAlert, CircleCheck } from '@lucide/svelte';
 
-	// Get current user
-	let userId: string | null = null;
-	user.subscribe((u) => {
-		userId = u?.user_id ?? null;
-	});
-
 	// Fetch leave types for dropdown
 	const leaveTypes = useLeaveTypes();
 
@@ -33,7 +26,6 @@
 
 	// Form state
 	let formData: ApplyLeaveForm = {
-		employee_id: userId ?? '',
 		leave_type_id: '',
 		start_date: '',
 		end_date: '',
@@ -76,11 +68,6 @@
 	 * Handle real-time validation on field change
 	 */
 	function handleFieldChange(field: keyof ApplyLeaveForm) {
-		// Update employee_id from store if not set
-		if (field === 'employee_id' && !formData.employee_id && userId) {
-			formData.employee_id = userId;
-		}
-
 		// Validate just this field
 		if (field === 'end_date' && formData.start_date) {
 			// Validate end_date >= start_date
@@ -109,21 +96,14 @@
 		showSuccess = false;
 
 		try {
-			// Ensure employee_id is set
-			const submitData: ApplyLeaveForm = {
-				...formData,
-				employee_id: formData.employee_id || userId || ''
-			};
-
 			// Submit via mutation
-			await $applyLeave.mutateAsync(submitData);
+			await $applyLeave.mutateAsync(formData);
 
 			// Success
 			showSuccess = true;
 
 			// Reset form
 			formData = {
-				employee_id: userId ?? '',
 				leave_type_id: '',
 				start_date: '',
 				end_date: '',
@@ -159,17 +139,11 @@
 	 */
 	function isFormValid(): boolean {
 		return !!(
-			formData.employee_id &&
 			formData.leave_type_id &&
 			formData.start_date &&
 			formData.end_date &&
 			Object.keys(fieldErrors).length === 0
 		);
-	}
-
-	// Update employee_id when userId changes
-	$: if (userId && !formData.employee_id) {
-		formData.employee_id = userId;
 	}
 </script>
 

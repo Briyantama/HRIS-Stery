@@ -11,88 +11,59 @@ export const LeaveStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED
 
 export type LeaveStatus = z.infer<typeof LeaveStatus>;
 
-// Leave type codes
-export const LeaveTypeCode = z.enum([
-	'LEAVE_TYPE_CODE_UNSPECIFIED',
-	'LEAVE_TYPE_CODE_ANNUAL',
-	'LEAVE_TYPE_CODE_SICK',
-	'LEAVE_TYPE_CODE_MATERNITY',
-	'LEAVE_TYPE_CODE_PATERNITY',
-	'LEAVE_TYPE_CODE_BEREAVEMENT',
-	'LEAVE_TYPE_CODE_UNPAID',
-	'LEAVE_TYPE_CODE_OTHER'
-]);
+// Backend response shapes (plain types, the server is trusted).
+export interface LeaveType {
+	id: string;
+	code: string;
+	name: string;
+	max_days_per_year: number;
+	requires_document: boolean;
+	is_paid: boolean;
+	is_active: boolean;
+}
 
-export type LeaveTypeCode = z.infer<typeof LeaveTypeCode>;
+export interface LeaveTypeBalance {
+	leave_type_id: string;
+	entitled_days: number;
+	used_days: number;
+	pending_days: number;
+	remaining_days: number;
+}
 
-// Leave type definition
-export const LeaveTypeSchema = z.object({
-	id: z.string().uuid(),
-	code: z.string(),
-	name: z.string(),
-	max_days_per_year: z.number(),
-	requires_document: z.boolean(),
-	is_paid: z.boolean(),
-	is_active: z.boolean()
-});
+export interface LeaveBalance {
+	tenant_id: string;
+	employee_id: string;
+	year: number;
+	by_type: LeaveTypeBalance[];
+}
 
-export type LeaveType = z.infer<typeof LeaveTypeSchema>;
+export interface LeaveRequest {
+	id: string;
+	tenant_id: string;
+	employee_id: string;
+	leave_type_id: string;
+	status: LeaveStatus;
+	start_date: string;
+	end_date: string;
+	days_count: number;
+	reason: string;
+	rejection_reason?: string | null;
+	approved_by_id?: string | null;
+	approved_at?: string | null;
+	document_key?: string | null;
+	created_at: string;
+	updated_at: string;
+}
 
-// Single leave type balance breakdown
-export const LeaveTypeBalanceSchema = z.object({
-	leave_type_id: z.string().uuid(),
-	entitled_days: z.number(),
-	used_days: z.number(),
-	pending_days: z.number(),
-	remaining_days: z.number()
-});
-
-export type LeaveTypeBalance = z.infer<typeof LeaveTypeBalanceSchema>;
-
-// Overall leave balance for an employee
-export const LeaveBalanceSchema = z.object({
-	tenant_id: z.string().uuid(),
-	employee_id: z.string().uuid(),
-	year: z.number(),
-	by_type: z.array(LeaveTypeBalanceSchema)
-});
-
-export type LeaveBalance = z.infer<typeof LeaveBalanceSchema>;
-
-// Single leave request
-export const LeaveRequestSchema = z.object({
-	id: z.string().uuid(),
-	tenant_id: z.string().uuid(),
-	employee_id: z.string().uuid(),
-	leave_type_id: z.string().uuid(),
-	status: LeaveStatus,
-	start_date: z.string(),
-	end_date: z.string(),
-	days_count: z.number(),
-	reason: z.string(),
-	rejection_reason: z.string().optional().nullable(),
-	approved_by_id: z.string().optional().nullable(),
-	approved_at: z.string().optional().nullable(),
-	document_key: z.string().optional().nullable(),
-	created_at: z.string(),
-	updated_at: z.string()
-});
-
-export type LeaveRequest = z.infer<typeof LeaveRequestSchema>;
-
-// List leave requests response
-export const ListLeaveRequestsResponseSchema = z.object({
-	items: z.array(LeaveRequestSchema),
-	page: z.number(),
-	per_page: z.number(),
-	total: z.number()
-});
-
-export type ListLeaveRequestsResponse = z.infer<typeof ListLeaveRequestsResponseSchema>;
+export interface ListLeaveRequestsResponse {
+	items: LeaveRequest[];
+	page: number;
+	per_page: number;
+	total: number;
+}
 
 // Apply leave form validation
 export const ApplyLeaveFormSchema = z.object({
-	employee_id: z.string().uuid('Invalid employee ID'),
 	leave_type_id: z.string().uuid('Please select a leave type'),
 	start_date: z.string().refine((date) => /^\d{4}-\d{2}-\d{2}$/.test(date), 'Invalid date format'),
 	end_date: z.string().refine((date) => /^\d{4}-\d{2}-\d{2}$/.test(date), 'Invalid date format'),
