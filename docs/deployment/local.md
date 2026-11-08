@@ -1,175 +1,49 @@
-# Local Development Deployment
+# Local development
+
+One Go process (`apps/api`) serves `/api/v1` and runs the event consumers. Postgres 18 holds the data,
+Dragonfly holds the token revocation list, rate limits and the `hris:events` stream, and RustFS stores documents.
 
 ## Prerequisites
 
-- Docker & Docker Compose
-- Go 1.24+
-- PostgreSQL 16+ (local or via Docker)
-- NATS 2.10+ (local or via Docker)
-- grpcurl (for testing)
+- Go (version in `apps/api/go.mod`) and Node >= 20.19
+- Docker (Dragonfly and RustFS come from `deploy/docker-compose.yml`)
+- PostgreSQL 18 on the host
+- The kit repo checked out next to this one: `../stery-kit` (the Go module and `@stery/kit` resolve from it)
 
-## Quick Start (Docker Compose)
-
-```bash
-# 1. Copy environment template
-cp .env.example .env
-
-# 2. Update .env with local values (optional - defaults are fine for local)
-nano .env
-
-# 3. Build and start all services
-docker-compose -f docker-compose.production.yml build
-docker-compose -f docker-compose.production.yml up -d
-
-# 4. Verify services are healthy
-sleep 5
-docker-compose -f docker-compose.production.yml ps
-
-# 5. Check service health
-grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
-grpcurl -plaintext localhost:50052 grpc.health.v1.Health/Check
-```
-
-## Manual Setup (No Docker)
+## Start
 
 ```bash
-# 1. Start PostgreSQL
-brew services start postgresql@16  # macOS
-# or
-sudo systemctl start postgresql    # Linux
-
-# 2. Create databases
-createdb -U postgres hris
-psql -U postgres hris << EOF
-  CREATE SCHEMA auth;
-  CREATE SCHEMA employee;
-  CREATE SCHEMA attendance;
-  CREATE SCHEMA leave;
-  CREATE SCHEMA notification;
-EOF
-
-# 3. Run migrations per service
-cd services/auth-service
-migrate -path migrations/ -database "postgres://user:pass@localhost/hris" up
-cd ../..
-
-# Repeat for each service...
-
-# 4. Start NATS (with JetStream)
-nats-server -js
-
-# 5. Start Redis
-redis-server
-
-# 6. Build services
-go build ./services/auth-service/cmd/server/
-go build ./services/employee-service/cmd/server/
-# ... repeat for other services
-
-# 7. Start services in separate terminals
-export DATABASE_URL=postgres://user:pass@localhost/hris/auth
-export GRPC_PORT=50051
-export NATS_URL=nats://localhost:4222
-./auth-service
-
-# Repeat in separate terminals for other services...
+cp .env.example .env          # fill the secrets; nothing has a default
+make up                       # Dragonfly + RustFS, migrations, API on :8000 (log in .run/api.log)
+make status                   # pid and /healthz
+cd apps/web && npm install && API_URL=http://localhost:8000 npm run dev
 ```
 
-## Testing Services Locally
+`make down` stops the API and the containers. `make build` writes the binary to `.run/api`.
 
-### Test Auth Service Login
+## Migrations
 
 ```bash
-grpcurl -plaintext \
-  -d '{"email":"admin@example.com","password":"password123"}' \
-  localhost:50051 \
-  hris.auth.v1.AuthService/Login
+cd apps/api
+go run ./cmd/migrate up       # also: down, status
 ```
 
-### Test Employee Service Get Employee
+Migrations are goose files embedded from `apps/api/internal/db/migrations`.
+
+## Tests
 
 ```bash
-grpcurl -plaintext \
-  -d '{"tenant_id":"<tenant-uuid>","employee_id":"<emp-uuid>"}' \
-  localhost:50052 \
-  hris.workforce.v1.EmployeeService/GetEmployee
+cd apps/api
+TEST_DATABASE_URL=postgres://postgres:<password>@127.0.0.1:5432/postgres?sslmode=disable go test ./...
+go test ./services/leave/...  # one package
+cd ../web && npm run check && npm run test:unit
 ```
 
-### Test Notification Service (SMTP)
-
-```bash
-# Send notification
-grpcurl -plaintext \
-  -d '{
-    "tenant_id":"<tenant-uuid>",
-    "recipient_id":"<user-uuid>",
-    "template_key":"leave.requested",
-    "variables":{"leave_type":"ANNUAL","days":"5"},
-    "channels":["NOTIFICATION_CHANNEL_EMAIL"]
-  }' \
-  localhost:50055 \
-  hris.notification.v1.NotificationService/SendNotification
-```
-
-## Development Workflow
-
-### Run Unit Tests
-
-```bash
-go test ./services/auth-service/internal/...
-go test ./services/employee-service/internal/...
-# ... repeat for all services
-```
-
-### Run Integration Tests
-
-```bash
-# Requires PostgreSQL + NATS running
-go test -tags integration ./services/auth-service/internal/...
-go test -tags integration ./services/employee-service/internal/...
-```
-
-### Format & Lint Code
-
-```bash
-go fmt ./services/...
-go vet ./services/...
-```
-
-### View Logs
-
-```bash
-# Docker
-docker-compose -f docker-compose.production.yml logs -f auth-service
-
-# Local binary
-# Logs go to stdout
-```
-
-## Stopping Services
-
-```bash
-# Docker
-docker-compose -f docker-compose.production.yml down
-
-# Manual
-# Press Ctrl+C in each terminal
-```
+Tests that need Postgres create and drop their own databases through `TEST_DATABASE_URL`.
+`make check` (`scripts/check.sh`) is what CI runs.
 
 ## Troubleshooting
 
-**Q: "PostgreSQL connection refused"**  
-A: Ensure PostgreSQL is running and database/schemas exist. Check DATABASE_URL.
-
-**Q: "NATS connection refused"**  
-A: Ensure NATS server is running with JetStream enabled: `nats-server -js`
-
-**Q: "Port already in use"**  
-A: Change port in environment: `export GRPC_PORT=50061` or kill existing process.
-
-**Q: "gRPC Health Check fails"**  
-A: Check service logs for startup errors. Service may not have completed initialization.
-
----
-
-See `staging.md` and `production.md` for deployment to staging/production environments.
+- `go` complains about `go.work`: run with `GOWORK=off`.
+- 401 on every call after login: the API's `AUTH_PUBLIC_KEY` does not match the key that signed the token.
+- Web login returns "Cannot reach the HRIS API": `API_URL` is wrong or the API is down (`make status`).

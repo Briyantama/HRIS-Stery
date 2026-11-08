@@ -83,6 +83,16 @@ The target stack of every Stery Suite product is the SELA stack (owner decision;
 
 Note: in `standalone` mode (default) HRIS uses the stack above **with** its own users, sessions and tenants; `suite` mode only swaps the identity, entitlement, notification, audit and event adapters (2.3).
 
+Implementation status 2026-11-08 (ADR-0005, ADR-0006). Rows 1-3, 5, 11, 12 and 17 are in place: one module `apps/api` with `cmd/api`, `cmd/migrate` and `services/<name>`, goose migrations in `apps/api/internal/db/migrations`, slog, Postgres 18, `scripts/check.sh` and CI. Shared code comes from the sibling repo `stery-kit` (`httpx`, `health`, `objstore`, `migrate`, `testdb`, `pgtenant`, `events`, `authn`, `ratelimit`; npm `@stery/kit`), not from a `kit/` folder in a suite repo. Where the implementation differs from this table:
+
+| Row | As built | Why |
+|---|---|---|
+| 4 | REST only; no gRPC adapter, no `api/proto`, no `gen/go` | no machine client exists (ADR-0005, option C rejected) |
+| 7, 10 | Dragonfly stream `hris:events` with four consumer groups and `processed_events` idempotency; no Postgres outbox; events published after commit | ADR-0006 |
+| 9 | RS256 JWT verified in the API (`authn.Authenticate`, roles per route), refresh tokens and revocation list in Dragonfly; the web keeps the access token in an HttpOnly cookie (`hris_session`) behind a SvelteKit `/api` proxy, never in browser storage | ADR-0005; opaque sessions stay the target (FR-HRS-SEC.4) |
+| 15 | SvelteKit 2.63 + Svelte 5 + Vite 8 + TypeScript 6 with server routes (login action, `/api` proxy, `adapter-auto`), not `ssr=false` + `adapter-static` | the HttpOnly-cookie BFF needs a server |
+| 16 | `deploy/docker-compose.yml` (Dragonfly, RustFS, optional `api` profile) and `docker-compose.production.yml`; API port 8000 | ports kept from the previous gateway |
+
 ### 2.2 Module decomposition
 
 Current state: seven standalone Go services, each with its own process, Postgres schema and gRPC port, plus an empty ai-service. Target: a single `apps/api` process with `services/<name>` modules.

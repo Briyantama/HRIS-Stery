@@ -1,5 +1,7 @@
 # ADR-0003: NATS JetStream as the Async Event Backbone
 
+Status: Superseded by ADR-0006 (2026-11-08)
+
 **Status:** Accepted  
 **Date:** 2026-05-30  
 **Deciders:** Architecture Team  

@@ -162,3 +162,5 @@ This template is enforced by CI linting of migration files.
 - Every new Go service must use `services/_shared/postgres/rls.go` for connection setup.
 - The `hris_admin` role credentials must never appear in application service environment variables.
 - Penetration testing must include a cross-tenant access test before each production release.
+
+Amended 2026-11-08: migrations are goose files in apps/api/internal/db/migrations; PgBouncer is no longer deployed; set_config(..., true) inside the transaction keeps tenant isolation.

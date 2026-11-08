@@ -1,254 +1,79 @@
-# HRIS-Stery — Claude Code Rules
+# CLAUDE.md
 
-This file governs all Claude Code behavior in this repository.
-Read every section before generating any file. These rules are non-negotiable.
+Guidance for Claude Code in this repository.
 
----
+## Project
 
-## 0. Pre-Code Checklist
+Multi-tenant HRIS SaaS for the Indonesian market. `docs/FSD_*` is the technical reference; architecture decisions are in `docs/adr/` (0002 RLS, 0004 Phase 2 deferral, 0005 single-module Go API, 0006 Dragonfly streams; 0001 and 0003 are superseded). No architectural change without an ADR.
 
-Before writing any code, Claude must:
+Phase 1 services: auth, employee, attendance, leave, notification, audit, document. Phase 2 (payroll, tax-rules, recruitment, performance) stays unimplemented (ADR-0004); routes, if added, return 501.
 
-1. Read the relevant ADR in `docs/adr/` for the area being changed.
-2. Identify which bounded context and service owns the change.
-3. Confirm the proto contract exists in `proto/hris/{domain}/v1/` before writing handlers.
-4. Confirm no business logic will land in Laravel controllers or gRPC handlers directly.
-5. Confirm migrations have both `up` and `down` files.
+## Layout
 
-If any of these cannot be confirmed, stop and ask.
+```
+apps/api/                     one Go module github.com/Briyantama/HRIS-Stery (Go 1.25.1)
+  cmd/api/                    HTTP server: main.go (run(ctx, getenv)), routes.go (newMux)
+  cmd/migrate/                goose up|down, reads DATABASE_URL
+  internal/config/            Load(getenv) with fail-fast validation
+  internal/db/migrations/     goose SQL files NNNN_name.sql (0001 bootstrap, auth 0011-0013, employee 0021-0022,
+                              attendance 0031-0032, leave 0041-0042, notification 0051, audit 0061, document 0071)
+  internal/testdb/            template-clone test databases (wraps stery-kit/testdb)
+  services/<name>/            auth employee attendance leave notification audit document
+    domain/ application/{commands,queries}/ infrastructure/   business logic, ports, adapters
+    deps.go                   Deps + Build(d) (+ ConsumerGroup/Consumers for event consumers)
+    http.go                   HTTPHandler.Register(mux): routes "VERB /api/v1/..."
+apps/web/                     SvelteKit 2 + Svelte 5, Tailwind 4, TanStack Query, Zod (adapter-auto)
+deploy/docker-compose.yml     Dragonfly + RustFS (Postgres runs outside compose)
+scripts/check.sh              quality gate, stages go and web
+```
 
----
+Shared Go and web code lives in the sibling repo `../stery-kit` (D5, ADR-0005): Go module `github.com/Briyantama/stery-kit/go` (httpx, health, objstore, migrate, testdb, pgtenant, events, authn, ratelimit) and npm package `@stery/kit` (`stery-kit/web`). `apps/api/go.mod` points at it with `replace ... => ../../../stery-kit/go`. Build and test need that checkout; change kit code in the kit repo, not here.
 
-## 1. Architecture Rules (Non-Negotiable)
-
-### 1.1 Layer Boundaries
+## Commands
 
 ```bash
-Frontend (SvelteKit)
-  → REST/JSON → Laravel Gateway
-    → HTTP/JSON (grpc-gateway) → Go Services (gRPC)
-      ↔ gRPC (service-to-service)
-      → NATS JetStream (async events)
+make up        # compose up (Dragonfly, RustFS), migrate up, start the API in the background (.run/api.pid)
+make down      # stop the API and compose
+make status    # API pid + curl /healthz
+make build     # go build -o .run/api ./cmd/api
+make check     # bash scripts/check.sh (needs TEST_DATABASE_URL)
 ```
 
-- **Never** call another service's database schema directly. All cross-service data goes through gRPC or event projections.
-- **Never** put business logic in Laravel controllers, gRPC handlers, or SvelteKit `+page.svelte` files.
-- **Never** use `interface{}` or `any` in Go domain types. Only allowed in infrastructure adapters.
-- **Never** use raw `string` for `tenant_id` comparisons in domain code. Use the `TenantID` value object.
+In `apps/api`:
 
-### 1.2 Service Ownership
-
-Each service owns exactly one PostgreSQL schema. The mapping is:
-
-| Service              | Schema                |
-| -------------------- | --------------------- |
-| auth-service         | `auth`                |
-| employee-service     | `employee`            |
-| attendance-service   | `attendance`          |
-| leave-service        | `leave`               |
-| notification-service | `notification`        |
-| audit-service        | `audit`               |
-| document-service     | `document`            |
-| ai-service           | no schema (stateless) |
-
-### 1.3 Phase Boundaries
-
-**Phase 1 (MVP) services only:**
-`auth`, `employee`, `attendance`, `leave`, `notification`, `audit`, `document`, `ai`
-
-**Phase 2 — Do not implement, do not scaffold business logic:**
-`payroll`, `tax-rules`, `recruitment`, `performance`
-
-Phase 2 routes must return `501 Not Implemented`. No payroll domain logic exists in MVP code.
-
----
-
-## 2. Go Rules
-
-- Go version: **1.24+** with modules. Run `go mod tidy` after any dependency change.
-- Project layout per service:
-
-  ```bash
-  cmd/server/main.go          ← entrypoint only, no logic
-  internal/domain/            ← aggregates, value objects, domain events
-  internal/application/
-    commands/                 ← write side (CQRS)
-    queries/                  ← read side (CQRS)
-  internal/infrastructure/
-    postgres/                 ← sqlc-generated queries + repo implementations
-    redis/                    ← cache + token store
-  internal/interfaces/
-    grpc/                     ← gRPC server handlers (call application layer only)
-    http/                     ← grpc-gateway HTTP handlers (auto-generated)
-  migrations/                 ← golang-migrate files (always reversible)
-  ```
-
-- Use **sqlc + pgx/v5** for all database access. No raw `database/sql` strings in domain code.
-- Use **Uber zap** for structured logging. Every log entry must include `tenant_id` and `request_id`.
-- Use **OpenTelemetry Go SDK** for tracing. Every gRPC handler and repository method must be instrumented.
-- Return gRPC status errors: `status.Errorf(codes.NotFound, "employee %s not found", id)`.
-- Use `context.Context` as the first argument to every function that touches I/O.
-- Inject all dependencies via constructors. No `init()` functions, no package-level vars for DB/NATS/Redis.
-- Every NATS consumer must have an idempotency table. Document the idempotency design in the PR.
-- Wrap errors with context: `fmt.Errorf("creating employee: %w", err)`.
-- Write unit tests for all use case (application layer) logic. Mock at the repository interface boundary.
-
-### Go Forbidden Patterns
-
-```go
-// FORBIDDEN — business logic in handler
-func (h *Handler) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
-    if req.Email == "" { /* validation here */ }  // ← use application layer
-    db.Exec("INSERT INTO ...")                     // ← never raw SQL in handlers
-}
-
-// FORBIDDEN — raw tenant_id string
-tenantID := ctx.Value("tenant_id").(string)
-db.Query("SELECT * FROM employees WHERE tenant_id = $1", tenantID) // ← use TenantID value object + RLS
-
-// FORBIDDEN — global state
-var db *sql.DB  // package-level
+```bash
+go run ./cmd/migrate up          # or down
+go run ./cmd/api                 # :8000
+go test ./services/leave/...     # one package
+gofmt -l . && go vet ./...
 ```
 
----
+Frontend (`apps/web`): `npm install`, `npm run dev`, `npm run check`, `npm run test:unit`. Node >= 20.19.
 
-## 3. Laravel Rules
+The full `scripts/check.sh` runs in GitHub CI. Locally run targeted Go tests, `npm run check` and Vitest. `go test -race` needs cgo and runs in CI only. Port 8080 on this machine belongs to an unrelated Apache; the API listens on 8000.
 
-Laravel is **API Gateway and Auth layer only**. It is not a domain service.
+## Conventions
 
-- Laravel version: **11.x**
-- Auth: **Laravel Sanctum** in API token mode. Tokens are short-lived JWTs signed with RSA. See ADR-0005.
-- RBAC: **Spatie Permission**. Roles: `hr_admin`, `manager`, `employee`. Define in seeder.
-- Controller maximum: **20 lines** of logic. Anything longer belongs in a Service class.
-- Form Requests: every POST/PUT route must use a Form Request class for validation.
-- Service classes in `app/Services/` call Go services via HTTP/JSON (grpc-gateway). No gRPC-PHP extension.
-- Use **Guzzle** (built into Laravel) to call grpc-gateway endpoints. Wrap in typed Service classes.
-- Error handling: catch all exceptions in `app/Exceptions/Handler.php`. Return JSON with `code`, `message`. Never expose stack traces.
-- Use **Laravel Horizon** for queue monitoring. Redis driver only.
-- Enable **Laravel Pint** (PSR-12). Run `./vendor/bin/pint` before commit.
-- Multi-tenancy: `TenantResolver` middleware extracts `tenant_id` from the validated JWT and sets it on the authenticated user model. Every controller can access `auth()->user()->tenant_id`.
+- Handlers respond only through `httpx.WriteSuccess` / `httpx.WriteError`; envelope `{success,data,error}`. Error text is a short fixed sentence; unexpected errors return 500 `internal error`, never `err.Error()`.
+- Tenant, actor and employee-self ids come from `authn.FromContext`, never from the request body.
+- Every route is public on purpose (`POST /api/v1/auth/login|refresh|register`, `GET /healthz`) or wrapped by `authn.Authenticate`; roles (`hr_admin`, `manager`, `employee`) via `authn.WithRole`.
+- Status codes: 200 read/update/action, 201 create with `Location`, 400 bad JSON, 422 validation, 409 conflict, 404 missing or cross-tenant, 401, 403.
+- JSON fields are `snake_case`. Paginated lists use `?page=&per_page=` (default 20, max 100) and return `{items,page,per_page,total}`.
+- Logging: `log/slog` with `InfoContext`/`ErrorContext`; add `tenant_id` where known.
+- Repositories use pgx/v5 + pgxpool (sqlc output where it exists). `:execresult` calls check `RowsAffected()==0` for not-found.
+- Errors wrapped with `%w`. Tests in external `_test` packages, table-driven or Arrange/Act/Assert; DB tests use `testdb.NewMigratedURL(t)` and skip when `TEST_DATABASE_URL` is unset.
+- Business rules live in `domain/` and `application/`; `infrastructure/` and `http.go` hold none. No `any`/`interface{}` in domain types; use the `TenantID` value object, never raw string compares.
+- Migrations: one goose file per change with `-- +goose Up` and `-- +goose Down`, numbered inside the module's range. Never edit an applied migration.
+- Comments only for a non-obvious why. Secrets go in `.env`, never in tracked files.
 
-### Laravel Forbidden Patterns
+## Invariants
 
-```php
-// FORBIDDEN — business logic in controller
-public function store(Request $request) {
-    $salary = $request->base * 1.13; // ← this is domain logic
-    DB::table('employees')->insert(...); // ← no raw DB in controllers
-}
-
-// FORBIDDEN — calling another service's DB
-DB::connection('employee_db')->table('employees')->get(); // ← use gRPC only
-
-// FORBIDDEN — fat controller (> 20 lines of logic)
-```
-
----
-
-## 4. SvelteKit Rules
-
-- SvelteKit version: **2.x** with Svelte **5** (runes mode).
-- TypeScript everywhere. No `.js` files in `src/`.
-- TanStack Query (`@tanstack/svelte-query`) for all server state. No `fetch` calls in `+page.svelte` scripts directly.
-- Zod schemas in `src/lib/schemas/` for all form validation and API response types.
-- shadcn-svelte for UI components. Do not write raw HTML form inputs without a component wrapper.
-- Auth guard in `hooks.server.ts`. Every protected route returns a redirect if no valid session.
-- Use SvelteKit route groups: `(auth)` for public, `(app)` for protected.
-- Stores (`$lib/stores/`) for UI-only state (sidebar open/closed, theme). Never store server data in Svelte stores — use TanStack Query cache.
-- OpenTelemetry in `instrumentation.server.js` for all server-side traces.
-- E2E tests with Playwright in `tests/e2e/`. Unit tests with Vitest in `tests/unit/`.
-
-### SvelteKit Forbidden Patterns
-
-```svelte
-<!-- FORBIDDEN — fetch in page script -->
-<script lang="ts">
-  const res = await fetch('/api/employees'); // ← use createQuery
-  const data = await res.json();
-</script>
-
-<!-- FORBIDDEN — business logic in page -->
-<script lang="ts">
-  const tax = salary * 0.05; // ← belongs in a utility or comes from API
-</script>
-```
-
----
-
-## 5. Proto / Buf Rules
-
-- All protos under `proto/hris/{domain}/v1/`. Breaking changes require `v2/`.
-- Run `buf lint` before committing any `.proto` file. Zero warnings allowed.
-- Run `buf breaking --against .git#branch=main` on every PR touching `proto/`.
-- Use `google.protobuf.Timestamp` for all time fields (never `string` dates in protos).
-- Use `google.protobuf.FieldMask` for partial update RPCs.
-- Every RPC must have an HTTP annotation for grpc-gateway (see `proto/hris/auth/v1/auth.proto` as reference).
-- Message naming: `{Verb}{Entity}Request` / `{Verb}{Entity}Response`. No ambiguous names.
-
----
-
-## 6. Event / NATS Rules
-
-- All events must conform to the envelope schema: `event_id` (UUID v7), `event_type`, `tenant_id`, `actor_id`, `occurred_at`, `schema_version`, `payload`.
-- Subject taxonomy: `hris.{domain}.{entity}.{verb}` (all lowercase, dot-separated).
-- Every consumer service must maintain an `idempotency_processed_events` table. Log `event_id` before processing. Use `INSERT ... ON CONFLICT DO NOTHING` to skip duplicates.
-- Never publish events from within a database transaction. Publish after the transaction commits (transactional outbox pattern if needed).
-- JetStream stream name: `HRIS_EVENTS`. Consumer names: `{service-name}-{subject-slug}`.
-
----
-
-## 7. Database / Migration Rules
-
-- Every `up` migration must have a corresponding `down` migration. CI will run `up → down → up` to verify.
-- Use `golang-migrate` in all Go services. Migration files: `{NNN}_{description}.up.sql` / `{NNN}_{description}.down.sql`.
-- PostgreSQL RLS is mandatory on every table that contains `tenant_id`. See ADR-0002 and `services/auth-service/migrations/` for reference policy patterns.
-- Every table must have: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `tenant_id UUID NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`.
-- No `TRUNCATE` or `DELETE` in `audit.audit_events` — the table has an INSERT-ONLY RLS policy.
-
----
-
-## 8. Security Rules
-
-- JWT payload must include: `sub` (user ID), `tid` (tenant ID), `roles` (array), `exp`, `iat`.
-- Go services validate JWT signature using the public key from `AUTH_PUBLIC_KEY` env var. No round-trip to auth-service per request.
-- Refresh tokens stored in Redis with TTL. Revocation via Redis key deletion.
-- Never log JWT tokens, passwords, or PII. Mask fields in structured logs.
-- Rate limiting at gateway level (Laravel): per-tenant, per-endpoint. Redis-backed counters.
-- NATS subjects secured with ACLs. Each service has a dedicated NATS user with minimal permissions.
-
----
-
-## 9. Observability Rules
-
-- Every gRPC handler must create a child span: `tracer.Start(ctx, "EmployeeService.CreateEmployee")`.
-- Every repository method must create a child span with DB statement as attribute (sanitized — no values).
-- Metrics to expose per service: `rpc_requests_total`, `rpc_duration_seconds`, `db_query_duration_seconds`, `nats_messages_published_total`, `nats_messages_consumed_total`.
-- All services export to OTLP collector at `OTEL_EXPORTER_OTLP_ENDPOINT` env var.
-
----
-
-## 10. Comment Policy
-
-Write no comments except when the **why** is non-obvious:
-
-- A hidden constraint or regulatory requirement
-- A workaround for a specific external system bug
-- An invariant that would surprise a future reader
-
-Do not write comments that explain **what** the code does. Well-named identifiers do that.
-Do not reference the current task, issue number, or PR in code comments.
-
----
-
-## 11. What Claude Must Never Do
-
-- Generate payroll calculation logic in Phase 1. Return `501` and stop.
-- Generate recruitment or performance review business logic in Phase 1.
-- Write a Laravel controller longer than 20 lines of logic.
-- Add `WHERE tenant_id = ?` without also checking that RLS is active on the table.
-- Create a NATS consumer without an idempotency table.
-- Write a migration without a `down` file.
-- Use `interface{}` or `any` in a domain type.
-- Call an external service (OpenAI, etc.) without a per-tenant rate limit check.
-- Push secrets, API keys, or connection strings into any tracked file.
-- Implement a feature not in the Phase 1 service list without explicit instruction.
+- Postgres RLS on every `tenant_id` table. App role `hris_app` has no BYPASSRLS; `hris_admin` does. Every table: `id UUID PK default gen_random_uuid()`, `tenant_id UUID NOT NULL`, `created_at`/`updated_at TIMESTAMPTZ`.
+- Tenant-scoped repositories wrap every call in `pgtenant.WithTenantTx` (`set_config('app.tenant_id', ..., true)` inside the transaction). Non-tenant tables (`auth.permissions`, `auth.tenants`) skip it.
+- `audit` entries are insert-only (no UPDATE, DELETE, TRUNCATE).
+- Events go to the Dragonfly stream `hris:events` (ADR-0006). Envelope fields: `event_id` (UUIDv7), `event_type`, `tenant_id`, `actor_id`, `occurred_at`, `schema_version`, `payload`. Type naming `hris.{domain}.{entity}.{verb}`.
+- Publish after the DB commit, never inside the transaction.
+- Every consumer writes a processed-events row with `INSERT ... ON CONFLICT DO NOTHING`. A failed mark is logged and the entry stays un-acked (not swallowed). Consumers use the run context, never `context.Background()`.
+- `GetPermissions` stays one query (no N+1).
+- JWT RS256 with claims `sub`, `tid`, `roles[]`, `exp`, `iat`, verified locally with the public key; no round trip to auth.
+- Never log tokens, passwords or PII.
