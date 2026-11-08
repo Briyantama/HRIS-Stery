@@ -11,7 +11,6 @@ import (
 type ListNotificationsQuery struct {
 	TenantID    string
 	RecipientID string
-	Status      string
 	UnreadOnly  bool
 	Limit       int
 	Offset      int
@@ -55,35 +54,14 @@ func (h *ListNotificationsHandlerImpl) Handle(ctx context.Context, query ListNot
 		return nil, fmt.Errorf("list notifications: %w", err)
 	}
 
-	// Parse status if provided
-	var status domain.NotificationStatus
-	if query.Status != "" {
-		parsed, err := domain.NotificationStatusFromString(query.Status)
-		if err != nil {
-			status = domain.NotificationStatusUnknown
-		} else {
-			status = parsed
-		}
-	}
-
-	// Set defaults
-	limit := query.Limit
-	if limit == 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
 	offset := query.Offset
 	if offset < 0 {
 		offset = 0
 	}
 
 	filters := domain.ListFilters{
-		Status:     status,
 		UnreadOnly: query.UnreadOnly,
-		Limit:      limit,
+		Limit:      query.Limit,
 		Offset:     offset,
 	}
 
@@ -93,7 +71,7 @@ func (h *ListNotificationsHandlerImpl) Handle(ctx context.Context, query ListNot
 		return nil, fmt.Errorf("list notifications: fetch: %w", err)
 	}
 
-	total, err := h.notificationRepo.CountByRecipient(ctx, tenantID, recipientID, domain.ListFilters{Status: status, UnreadOnly: query.UnreadOnly})
+	total, err := h.notificationRepo.CountByRecipient(ctx, tenantID, recipientID, domain.ListFilters{UnreadOnly: query.UnreadOnly})
 	if err != nil {
 		return nil, fmt.Errorf("list notifications: count: %w", err)
 	}

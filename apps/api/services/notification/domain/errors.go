@@ -14,5 +14,4 @@ var (
 	ErrNoChannelsEnabled       = fmt.Errorf("no notification channels enabled")
 	ErrInvalidEmailConfig      = fmt.Errorf("invalid email configuration")
 	ErrNotificationNotFound    = fmt.Errorf("notification not found")
-	ErrChannelConfigNotFound   = fmt.Errorf("channel configuration not found")
 )

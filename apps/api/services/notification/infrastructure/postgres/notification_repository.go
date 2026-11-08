@@ -119,10 +119,6 @@ func (r *NotificationRepository) CountByRecipient(ctx context.Context, tenantID 
 func listWhere(tenantID domain.TenantID, recipientID domain.RecipientID, f domain.ListFilters) (string, []any) {
 	where := "tenant_id = $1 AND recipient_id = $2"
 	args := []any{tenantID.String(), recipientID.String()}
-	if f.Status != domain.NotificationStatusUnknown {
-		args = append(args, f.Status.String())
-		where += fmt.Sprintf(" AND status = $%d", len(args))
-	}
 	if f.UnreadOnly {
 		args = append(args, domain.NotificationStatusSent.String())
 		where += fmt.Sprintf(" AND read_at IS NULL AND status = $%d", len(args))

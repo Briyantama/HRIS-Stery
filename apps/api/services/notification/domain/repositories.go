@@ -5,7 +5,6 @@ import (
 )
 
 type ListFilters struct {
-	Status     NotificationStatus
 	UnreadOnly bool
 	Limit      int
 	Offset     int
@@ -23,16 +22,4 @@ type ChannelConfigRepository interface {
 	Create(ctx context.Context, config *NotificationChannelConfig) error
 	GetByTenant(ctx context.Context, tenantID TenantID) (*NotificationChannelConfig, error)
 	Update(ctx context.Context, config *NotificationChannelConfig) error
-}
-
-type RenderResult struct {
-	Subject        string
-	Body           string
-	RecipientEmail string // Email address for delivery (resolved from user ID)
-	RecipientName  string // Recipient name for personalization
-	PlainTextBody  string // Plain text fallback for email
-}
-
-type NotificationChannelAdapter interface {
-	Send(ctx context.Context, notif *Notification, rendered RenderResult) (string, error)
 }
