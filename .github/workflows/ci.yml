@@ -52,8 +52,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: HRIS-Stery/apps/api/go.mod
+      # Throwaway, CI-only credentials: compose interpolates every service, so the S3 keys must be set too.
+      - name: Write .env for the compose stack
+        run: |
+          cat > .env <<EOF
+          REDIS_PASSWORD=ci-redis-password
+          S3_ACCESS_KEY_ID=ci-access-key
+          S3_SECRET_ACCESS_KEY=ci-secret-key-value
+          EOF
       - name: Start Dragonfly
-        run: docker compose -f deploy/docker-compose.yml up -d dragonfly
+        run: docker compose --env-file .env -f deploy/docker-compose.yml up -d dragonfly
       - name: golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - name: check
@@ -78,8 +86,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # @stery/kit is a file: link; npm ci does not install the link target's own dependencies.
       - name: install frontends
         run: |
+          (cd ../stery-kit/web && npm ci)
           (cd apps/web && npm ci)
       - name: check
         run: bash scripts/check.sh
