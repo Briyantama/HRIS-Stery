@@ -37,12 +37,6 @@ func (h *MarkNotificationReadHandlerImpl) Handle(ctx context.Context, cmd MarkNo
 
 	updatedCount := 0
 
-	// Handle batch: if no notification IDs provided, mark all as read for tenant (future enhancement)
-	if len(cmd.NotificationIDs) == 0 {
-		// For now, return success with count 0
-		return &MarkNotificationReadResult{UpdatedCount: updatedCount}, nil
-	}
-
 	// Process each notification
 	for _, notifID := range cmd.NotificationIDs {
 		notificationID, err := domain.NewNotificationID(notifID)
