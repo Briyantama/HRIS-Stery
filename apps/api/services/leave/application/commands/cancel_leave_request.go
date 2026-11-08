@@ -19,19 +19,16 @@ type CancelLeaveRequestCommand struct {
 // CancelLeaveRequestHandler handles the cancel leave request command.
 type CancelLeaveRequestHandler struct {
 	leaveRequestRepo domain.LeaveRequestRepository
-	leaveBalanceRepo domain.LeaveBalanceRepository
 	eventPublisher   domain.EventPublisher
 }
 
 // NewCancelLeaveRequestHandler creates a new cancel leave request handler.
 func NewCancelLeaveRequestHandler(
 	leaveRequestRepo domain.LeaveRequestRepository,
-	leaveBalanceRepo domain.LeaveBalanceRepository,
 	eventPublisher domain.EventPublisher,
 ) *CancelLeaveRequestHandler {
 	return &CancelLeaveRequestHandler{
 		leaveRequestRepo: leaveRequestRepo,
-		leaveBalanceRepo: leaveBalanceRepo,
 		eventPublisher:   eventPublisher,
 	}
 }
@@ -73,40 +70,14 @@ func (h *CancelLeaveRequestHandler) Handle(ctx context.Context, cmd CancelLeaveR
 		return nil, fmt.Errorf("cancelling leave request: %w", err)
 	}
 
-	// Update balance based on original status
-	year := leaveRequest.StartDate().Year()
-	daysFloat := float64(leaveRequest.DaysCount())
-
-	// Get balance first (separate read transaction is acceptable)
-	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(
-		ctx,
-		tenantID,
-		leaveRequest.EmployeeID(),
-		leaveRequest.LeaveTypeID(),
-		year,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("fetching balance: %w", err)
-	}
-
-	if balance == nil {
-		return nil, fmt.Errorf("balance not found")
-	}
-
-	// If originally APPROVED, remove from used; if PENDING, remove from pending
+	// Give the days back from where they were held; the status write only succeeds while the request
+	// still has the status we read and the balance change is relative, both in one transaction.
+	days := float64(leaveRequest.DaysCount())
+	delta := domain.BalanceDelta{Pending: -days}
 	if originalStatus == domain.StatusApproved {
-		if err := balance.SubtractUsed(daysFloat); err != nil {
-			return nil, fmt.Errorf("subtracting used days: %w", err)
-		}
-	} else if originalStatus == domain.StatusPending {
-		if err := balance.RemovePending(daysFloat); err != nil {
-			return nil, fmt.Errorf("removing pending days: %w", err)
-		}
+		delta = domain.BalanceDelta{Used: -days}
 	}
-
-	// Cancel request and update balance atomically in a single transaction.
-	// If either operation fails, both roll back.
-	if err := h.leaveRequestRepo.CancelAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+	if err := h.leaveRequestRepo.TransitionAndUpdateBalanceAtomically(ctx, leaveRequest, originalStatus, delta); err != nil {
 		return nil, fmt.Errorf("cancelling leave request: %w", err)
 	}
 

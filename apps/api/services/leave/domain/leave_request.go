@@ -125,8 +125,11 @@ func RehydrateLeaveRequest(
 }
 
 // Approve approves the leave request.
-// Invariant: Can only approve if status is PENDING.
+// Invariants: only PENDING requests, and never by the requester themselves.
 func (lr *LeaveRequest) Approve(approverId EmployeeID) error {
+	if approverId.Equals(lr.employeeID) {
+		return ErrCannotDecideOwnRequest
+	}
 	if lr.status != StatusPending {
 		return ErrCannotApproveAlreadyRejected
 	}
@@ -141,8 +144,11 @@ func (lr *LeaveRequest) Approve(approverId EmployeeID) error {
 }
 
 // Reject rejects the leave request.
-// Invariant: Can only reject if status is PENDING.
-func (lr *LeaveRequest) Reject(reason string) error {
+// Invariants: only PENDING requests, and never by the requester themselves.
+func (lr *LeaveRequest) Reject(rejecterID EmployeeID, reason string) error {
+	if rejecterID.Equals(lr.employeeID) {
+		return ErrCannotDecideOwnRequest
+	}
 	if lr.status != StatusPending {
 		return ErrCannotRejectAlreadyApproved
 	}

@@ -118,14 +118,10 @@ func (h *CreateLeaveRequestHandler) Handle(ctx context.Context, cmd CreateLeaveR
 		return nil, fmt.Errorf("creating leave request: %w", err)
 	}
 
-	// Update balance: add to pending
-	if err := balance.AddPending(float64(cmd.DaysCount)); err != nil {
-		return nil, fmt.Errorf("updating balance: %w", err)
-	}
-
-	// Persist leave request and update balance atomically in a single transaction.
-	// If either operation fails, both roll back.
-	if err := h.leaveRequestRepo.CreateAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+	// Persist the request and add its days to pending atomically. The repository re-checks the balance
+	// in SQL (the read above can be stale) and rejects overlap with an existing pending/approved request.
+	delta := domain.BalanceDelta{Pending: float64(cmd.DaysCount)}
+	if err := h.leaveRequestRepo.CreateAndUpdateBalanceAtomically(ctx, leaveRequest, delta); err != nil {
 		return nil, fmt.Errorf("creating leave request: %w", err)
 	}
 

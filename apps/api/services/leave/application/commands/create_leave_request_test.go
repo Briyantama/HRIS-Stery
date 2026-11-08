@@ -9,17 +9,25 @@ import (
 )
 
 // Mock implementations for testing
+type transition struct {
+	request *domain.LeaveRequest
+	from    domain.LeaveStatus
+	delta   domain.BalanceDelta
+}
+
 type mockLeaveRequestRepo struct {
-	requests map[string]*domain.LeaveRequest
-	created  []*domain.LeaveRequest
-	updated  []*domain.LeaveRequest
+	requests      map[string]*domain.LeaveRequest
+	created       []*domain.LeaveRequest
+	createDeltas  []domain.BalanceDelta
+	transitions   []transition
+	createErr     error
+	transitionErr error
 }
 
 func newMockLeaveRequestRepo() *mockLeaveRequestRepo {
 	return &mockLeaveRequestRepo{
 		requests: make(map[string]*domain.LeaveRequest),
 		created:  []*domain.LeaveRequest{},
-		updated:  []*domain.LeaveRequest{},
 	}
 }
 
@@ -48,52 +56,29 @@ func (m *mockLeaveRequestRepo) ListByEmployee(ctx context.Context, tenantID doma
 	return nil, nil
 }
 
-func (m *mockLeaveRequestRepo) Update(ctx context.Context, req *domain.LeaveRequest) error {
-	m.updated = append(m.updated, req)
+func (m *mockLeaveRequestRepo) CreateAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, delta domain.BalanceDelta) error {
+	if m.createErr != nil {
+		return m.createErr
+	}
+	m.createDeltas = append(m.createDeltas, delta)
+	return m.Create(ctx, request)
+}
+
+func (m *mockLeaveRequestRepo) TransitionAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, from domain.LeaveStatus, delta domain.BalanceDelta) error {
+	if m.transitionErr != nil {
+		return m.transitionErr
+	}
+	m.transitions = append(m.transitions, transition{request: request, from: from, delta: delta})
 	return nil
-}
-
-func (m *mockLeaveRequestRepo) CreateAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
-	// Mock implementation: just call Create and then let the balance repo update
-	if err := m.Create(ctx, request); err != nil {
-		return err
-	}
-	return balanceRepo.Update(ctx, balance)
-}
-
-func (m *mockLeaveRequestRepo) ApproveAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
-	// Mock implementation: just call Update and then let the balance repo update
-	if err := m.Update(ctx, request); err != nil {
-		return err
-	}
-	return balanceRepo.Update(ctx, balance)
-}
-
-func (m *mockLeaveRequestRepo) RejectAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
-	// Mock implementation: just call Update and then let the balance repo update
-	if err := m.Update(ctx, request); err != nil {
-		return err
-	}
-	return balanceRepo.Update(ctx, balance)
-}
-
-func (m *mockLeaveRequestRepo) CancelAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, balance *domain.LeaveBalance, balanceRepo domain.LeaveBalanceRepository) error {
-	// Mock implementation: just call Update and then let the balance repo update
-	if err := m.Update(ctx, request); err != nil {
-		return err
-	}
-	return balanceRepo.Update(ctx, balance)
 }
 
 type mockLeaveBalanceRepo struct {
 	balances map[string]*domain.LeaveBalance
-	updated  []*domain.LeaveBalance
 }
 
 func newMockLeaveBalanceRepo() *mockLeaveBalanceRepo {
 	return &mockLeaveBalanceRepo{
 		balances: make(map[string]*domain.LeaveBalance),
-		updated:  []*domain.LeaveBalance{},
 	}
 }
 
@@ -113,12 +98,6 @@ func (m *mockLeaveBalanceRepo) GetByEmployeeAndType(ctx context.Context, tenantI
 
 func (m *mockLeaveBalanceRepo) ListByEmployee(ctx context.Context, tenantID domain.TenantID, employeeID domain.EmployeeID, year int) ([]*domain.LeaveBalance, error) {
 	return nil, nil
-}
-
-func (m *mockLeaveBalanceRepo) Update(ctx context.Context, balance *domain.LeaveBalance) error {
-	m.updated = append(m.updated, balance)
-	m.balances[balance.ID().String()] = balance
-	return nil
 }
 
 type mockEventPublisher struct {
@@ -202,14 +181,9 @@ func TestCreateLeaveRequestSuccess(t *testing.T) {
 		t.Errorf("expected 1 published event, got %d", len(eventPublisher.published))
 	}
 
-	// Verify balance was updated
-	if len(leaveBalanceRepo.updated) != 1 {
-		t.Errorf("expected 1 updated balance, got %d", len(leaveBalanceRepo.updated))
-	}
-
-	updatedBalance := leaveBalanceRepo.updated[0]
-	if updatedBalance.PendingDays() != 5.0 {
-		t.Errorf("expected pending days 5, got %f", updatedBalance.PendingDays())
+	// The balance change is a relative delta, not an absolute write
+	if len(leaveRequestRepo.createDeltas) != 1 || leaveRequestRepo.createDeltas[0] != (domain.BalanceDelta{Pending: 5}) {
+		t.Errorf("create deltas = %+v, want one {Pending: 5}", leaveRequestRepo.createDeltas)
 	}
 }
 

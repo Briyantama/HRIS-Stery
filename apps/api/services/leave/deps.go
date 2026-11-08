@@ -36,9 +36,9 @@ func Build(d Deps) (*HTTPHandler, error) {
 
 	return NewHTTPHandler(
 		commands.NewCreateLeaveRequestHandler(requests, balances, pub, postgres.NewEmployeeValidator(d.Pool)),
-		commands.NewApproveLeaveRequestHandler(requests, balances, pub),
-		commands.NewRejectLeaveRequestHandler(requests, balances, pub),
-		commands.NewCancelLeaveRequestHandler(requests, balances, pub),
+		commands.NewApproveLeaveRequestHandler(requests, pub),
+		commands.NewRejectLeaveRequestHandler(requests, pub),
+		commands.NewCancelLeaveRequestHandler(requests, pub),
 		queries.NewGetLeaveRequestHandler(requests),
 		queries.NewListLeaveRequestsHandler(requests),
 		queries.NewGetLeaveBalanceHandler(balances),

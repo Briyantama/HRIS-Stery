@@ -140,33 +140,31 @@ func (r *LeaveBalanceRepository) ListByEmployee(ctx context.Context, tenantID do
 	return balances, err
 }
 
-// Update persists changes to a leave balance.
-func (r *LeaveBalanceRepository) Update(ctx context.Context, balance *domain.LeaveBalance) error {
-	return pgtenant.WithTenantTx(ctx, r.pool, balance.TenantID().String(), "", func(tx pgx.Tx) error {
-		return r.updateWithTx(ctx, tx, balance)
-	})
-}
-
-// updateWithTx persists changes to a leave balance within an existing transaction.
-// Supports atomic operations wrapping multiple repositories.
-func (r *LeaveBalanceRepository) updateWithTx(ctx context.Context, tx pgx.Tx, balance *domain.LeaveBalance) error {
+// applyBalanceDelta adds the delta to the request's balance row in SQL. The WHERE clause keeps used and
+// pending non-negative and, when the delta grows the committed total, within the entitlement, so a
+// concurrent change can neither be overwritten nor push the balance over its limit; no row matched
+// means a guard failed.
+func applyBalanceDelta(ctx context.Context, tx pgx.Tx, request *domain.LeaveRequest, delta domain.BalanceDelta) error {
 	query := `
 		UPDATE leave.leave_balances
-		SET used_days = $1, pending_days = $2, updated_at = $3
-		WHERE id = $4
+		SET used_days = used_days + $1, pending_days = pending_days + $2, updated_at = now()
+		WHERE employee_id = $3 AND leave_type_id = $4 AND year = $5
+		  AND used_days + $1 >= 0 AND pending_days + $2 >= 0
+		  AND ($1 + $2 <= 0 OR used_days + pending_days + $1 + $2 <= entitled_days)
 	`
 	result, err := tx.Exec(ctx, query,
-		balance.UsedDays(),
-		balance.PendingDays(),
-		balance.UpdatedAt(),
-		balance.ID().String(),
+		delta.Used,
+		delta.Pending,
+		request.EmployeeID().String(),
+		request.LeaveTypeID().String(),
+		request.StartDate().Year(),
 	)
 	if err != nil {
 		return fmt.Errorf("update leave balance: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("leave balance not found")
+		return fmt.Errorf("leave balance for %d: %w", request.StartDate().Year(), domain.ErrInsufficientLeaveBalance)
 	}
 
 	return nil

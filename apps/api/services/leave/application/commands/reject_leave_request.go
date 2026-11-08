@@ -19,19 +19,16 @@ type RejectLeaveRequestCommand struct {
 // RejectLeaveRequestHandler handles the reject leave request command.
 type RejectLeaveRequestHandler struct {
 	leaveRequestRepo domain.LeaveRequestRepository
-	leaveBalanceRepo domain.LeaveBalanceRepository
 	eventPublisher   domain.EventPublisher
 }
 
 // NewRejectLeaveRequestHandler creates a new reject leave request handler.
 func NewRejectLeaveRequestHandler(
 	leaveRequestRepo domain.LeaveRequestRepository,
-	leaveBalanceRepo domain.LeaveBalanceRepository,
 	eventPublisher domain.EventPublisher,
 ) *RejectLeaveRequestHandler {
 	return &RejectLeaveRequestHandler{
 		leaveRequestRepo: leaveRequestRepo,
-		leaveBalanceRepo: leaveBalanceRepo,
 		eventPublisher:   eventPublisher,
 	}
 }
@@ -55,6 +52,11 @@ func (h *RejectLeaveRequestHandler) Handle(ctx context.Context, cmd RejectLeaveR
 		return nil, fmt.Errorf("invalid leave request id: %w", err)
 	}
 
+	rejecterID, err := domain.NewEmployeeID(cmd.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid actor id: %w", err)
+	}
+
 	// Fetch the leave request
 	leaveRequest, err := h.leaveRequestRepo.GetByID(ctx, tenantID, leaveRequestID)
 	if err != nil {
@@ -65,39 +67,15 @@ func (h *RejectLeaveRequestHandler) Handle(ctx context.Context, cmd RejectLeaveR
 		return nil, fmt.Errorf("leave request: %w", domain.ErrNotFound)
 	}
 
-	// Reject the request (enforces state machine invariants)
-	if err := leaveRequest.Reject(cmd.Reason); err != nil {
+	// Reject the request (enforces state machine invariants and no self-rejection)
+	if err := leaveRequest.Reject(rejecterID, cmd.Reason); err != nil {
 		return nil, fmt.Errorf("rejecting leave request: %w", err)
 	}
 
-	// Update balance: remove from pending
-	year := leaveRequest.StartDate().Year()
-	daysFloat := float64(leaveRequest.DaysCount())
-
-	// Get balance first (separate read transaction is acceptable)
-	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(
-		ctx,
-		tenantID,
-		leaveRequest.EmployeeID(),
-		leaveRequest.LeaveTypeID(),
-		year,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("fetching balance: %w", err)
-	}
-
-	if balance == nil {
-		return nil, fmt.Errorf("balance not found")
-	}
-
-	// Remove from pending
-	if err := balance.RemovePending(daysFloat); err != nil {
-		return nil, fmt.Errorf("removing pending days: %w", err)
-	}
-
-	// Reject request and update balance atomically in a single transaction.
-	// If either operation fails, both roll back.
-	if err := h.leaveRequestRepo.RejectAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+	// Release the pending days; the status write only succeeds while the request is still PENDING and
+	// the balance change is relative, both in one transaction.
+	delta := domain.BalanceDelta{Pending: -float64(leaveRequest.DaysCount())}
+	if err := h.leaveRequestRepo.TransitionAndUpdateBalanceAtomically(ctx, leaveRequest, domain.StatusPending, delta); err != nil {
 		return nil, fmt.Errorf("rejecting leave request: %w", err)
 	}
 

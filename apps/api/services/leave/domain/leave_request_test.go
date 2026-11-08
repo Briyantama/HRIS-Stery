@@ -70,6 +70,26 @@ func TestCannotApproveTwice(t *testing.T) {
 	}
 }
 
+func TestRequesterCannotDecideOwnRequest(t *testing.T) {
+	newReq := func() (*LeaveRequest, EmployeeID) {
+		employeeID := GenerateEmployeeID()
+		start := time.Now()
+		req, _ := NewLeaveRequest(MustNewTenantID("550e8400-e29b-41d4-a716-446655440000"), employeeID, GenerateLeaveTypeID(), start, start.AddDate(0, 0, 2), 3, "Vacation", "user-123")
+		return req, employeeID
+	}
+
+	req, self := newReq()
+	if err := req.Approve(self); err != ErrCannotDecideOwnRequest {
+		t.Errorf("Approve by requester = %v, want ErrCannotDecideOwnRequest", err)
+	}
+	if err := req.Reject(self, "no"); err != ErrCannotDecideOwnRequest {
+		t.Errorf("Reject by requester = %v, want ErrCannotDecideOwnRequest", err)
+	}
+	if !req.IsPending() || req.ApprovedByID() != nil {
+		t.Errorf("a refused decision must leave the request untouched, got %s", req.Status())
+	}
+}
+
 func TestRejectLeaveRequest(t *testing.T) {
 	tenantID := MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
 	employeeID := GenerateEmployeeID()
@@ -78,7 +98,7 @@ func TestRejectLeaveRequest(t *testing.T) {
 	endDate := startDate.AddDate(0, 0, 5)
 
 	req, _ := NewLeaveRequest(tenantID, employeeID, leaveTypeID, startDate, endDate, 5, "Vacation", "user-123")
-	err := req.Reject("Business constraints")
+	err := req.Reject(GenerateEmployeeID(), "Business constraints")
 	if err != nil {
 		t.Fatalf("Reject failed: %v", err)
 	}
@@ -123,7 +143,7 @@ func TestCannotCancelRejected(t *testing.T) {
 	endDate := startDate.AddDate(0, 0, 5)
 
 	req, _ := NewLeaveRequest(tenantID, employeeID, leaveTypeID, startDate, endDate, 5, "Vacation", "user-123")
-	_ = req.Reject("Business constraints")
+	_ = req.Reject(GenerateEmployeeID(), "Business constraints")
 
 	err := req.Cancel("Changed plans")
 	if err != ErrCannotCancelRejected {

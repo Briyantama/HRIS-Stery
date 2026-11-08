@@ -19,19 +19,16 @@ type ApproveLeaveRequestCommand struct {
 // ApproveLeaveRequestHandler handles the approve leave request command.
 type ApproveLeaveRequestHandler struct {
 	leaveRequestRepo domain.LeaveRequestRepository
-	leaveBalanceRepo domain.LeaveBalanceRepository
 	eventPublisher   domain.EventPublisher
 }
 
 // NewApproveLeaveRequestHandler creates a new approve leave request handler.
 func NewApproveLeaveRequestHandler(
 	leaveRequestRepo domain.LeaveRequestRepository,
-	leaveBalanceRepo domain.LeaveBalanceRepository,
 	eventPublisher domain.EventPublisher,
 ) *ApproveLeaveRequestHandler {
 	return &ApproveLeaveRequestHandler{
 		leaveRequestRepo: leaveRequestRepo,
-		leaveBalanceRepo: leaveBalanceRepo,
 		eventPublisher:   eventPublisher,
 	}
 }
@@ -70,43 +67,16 @@ func (h *ApproveLeaveRequestHandler) Handle(ctx context.Context, cmd ApproveLeav
 		return nil, fmt.Errorf("leave request: %w", domain.ErrNotFound)
 	}
 
-	// Approve the request (enforces state machine invariants)
+	// Approve the request (enforces state machine invariants and no self-approval)
 	if err := leaveRequest.Approve(approvedByID); err != nil {
 		return nil, fmt.Errorf("approving leave request: %w", err)
 	}
 
-	// Update balance: move from pending to used
-	year := leaveRequest.StartDate().Year()
-	daysFloat := float64(leaveRequest.DaysCount())
-
-	// Get balance first (separate read transaction is acceptable)
-	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(
-		ctx,
-		tenantID,
-		leaveRequest.EmployeeID(),
-		leaveRequest.LeaveTypeID(),
-		year,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("fetching balance: %w", err)
-	}
-
-	if balance == nil {
-		return nil, fmt.Errorf("balance not found")
-	}
-
-	// Update balance in memory: remove from pending and add to used
-	if err := balance.RemovePending(daysFloat); err != nil {
-		return nil, fmt.Errorf("removing pending days: %w", err)
-	}
-
-	if err := balance.AddUsed(daysFloat); err != nil {
-		return nil, fmt.Errorf("adding used days: %w", err)
-	}
-
-	// Approve request and save balance atomically in a single transaction.
-	// If either operation fails, both roll back.
-	if err := h.leaveRequestRepo.ApproveAndUpdateBalanceAtomically(ctx, leaveRequest, balance, h.leaveBalanceRepo); err != nil {
+	// Move the days from pending to used; the status write only succeeds while the request is still
+	// PENDING and the balance change is relative, both in one transaction.
+	days := float64(leaveRequest.DaysCount())
+	delta := domain.BalanceDelta{Used: days, Pending: -days}
+	if err := h.leaveRequestRepo.TransitionAndUpdateBalanceAtomically(ctx, leaveRequest, domain.StatusPending, delta); err != nil {
 		return nil, fmt.Errorf("approving leave request: %w", err)
 	}
 

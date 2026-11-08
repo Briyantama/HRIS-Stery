@@ -23,24 +23,16 @@ type LeaveRequestRepository interface {
 	// ListByEmployee retrieves all leave requests for a specific employee within a year.
 	ListByEmployee(ctx context.Context, tenantID TenantID, employeeID EmployeeID, year int) ([]*LeaveRequest, error)
 
-	// Update persists changes to a leave request.
-	Update(ctx context.Context, request *LeaveRequest) error
+	// CreateAndUpdateBalanceAtomically persists a leave request and applies the balance delta in one
+	// transaction. It returns ErrLeaveOverlapExists when the employee already has a pending or
+	// approved request overlapping the dates, and ErrInsufficientLeaveBalance when the balance
+	// cannot absorb the delta.
+	CreateAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, delta BalanceDelta) error
 
-	// CreateAndUpdateBalanceAtomically persists a leave request and updates balance atomically.
-	// Both operations commit together or both rollback on error.
-	CreateAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
-
-	// ApproveAndUpdateBalanceAtomically approves a leave request and updates balance atomically.
-	// Both operations commit together or both rollback on error.
-	ApproveAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
-
-	// RejectAndUpdateBalanceAtomically rejects a leave request and updates balance atomically.
-	// Both operations commit together or both rollback on error.
-	RejectAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
-
-	// CancelAndUpdateBalanceAtomically cancels a leave request and updates balance atomically.
-	// Both operations commit together or both rollback on error.
-	CancelAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, balance *LeaveBalance, balanceRepo LeaveBalanceRepository) error
+	// TransitionAndUpdateBalanceAtomically persists the request's new status and applies the balance
+	// delta in one transaction. The status write is conditional on the stored status still being
+	// from; otherwise it returns ErrInvalidStatusTransition and nothing changes.
+	TransitionAndUpdateBalanceAtomically(ctx context.Context, request *LeaveRequest, from LeaveStatus, delta BalanceDelta) error
 }
 
 // LeaveFilters defines optional filters for querying leave requests.
@@ -77,9 +69,13 @@ type LeaveBalanceRepository interface {
 
 	// ListByEmployee retrieves all balances for a specific employee in a year.
 	ListByEmployee(ctx context.Context, tenantID TenantID, employeeID EmployeeID, year int) ([]*LeaveBalance, error)
+}
 
-	// Update persists changes to a leave balance.
-	Update(ctx context.Context, balance *LeaveBalance) error
+// BalanceDelta is a relative change to a leave balance's used and pending days. Repositories apply it
+// in SQL (column = column + delta) so concurrent changes never overwrite each other.
+type BalanceDelta struct {
+	Used    float64
+	Pending float64
 }
 
 // EventPublisher publishes domain events to the HRIS event stream.

@@ -105,6 +105,7 @@ var clientErrors = []struct {
 	status int
 }{
 	{domain.ErrNotFound, http.StatusNotFound},
+	{domain.ErrCannotDecideOwnRequest, http.StatusForbidden},
 	{domain.ErrInsufficientLeaveBalance, http.StatusConflict},
 	{domain.ErrCannotApproveAlreadyRejected, http.StatusConflict},
 	{domain.ErrCannotRejectAlreadyApproved, http.StatusConflict},

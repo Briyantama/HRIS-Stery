@@ -219,20 +219,13 @@ func (r *LeaveRequestRepository) ListByTenant(ctx context.Context, tenantID doma
 	return records, err
 }
 
-// Update persists changes to a leave request.
-func (r *LeaveRequestRepository) Update(ctx context.Context, request *domain.LeaveRequest) error {
-	return pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
-		return r.updateWithTx(ctx, tx, request)
-	})
-}
-
-// updateWithTx persists changes to a leave request within an existing transaction.
-// Supports atomic operations wrapping multiple repositories.
-func (r *LeaveRequestRepository) updateWithTx(ctx context.Context, tx pgx.Tx, request *domain.LeaveRequest) error {
+// transitionWithTx persists a status change only while the stored status is still from, so two
+// concurrent decisions cannot both succeed.
+func (r *LeaveRequestRepository) transitionWithTx(ctx context.Context, tx pgx.Tx, request *domain.LeaveRequest, from domain.LeaveStatus) error {
 	query := `
 		UPDATE leave.leave_requests
 		SET status = $1, rejection_reason = $2, approved_by_id = $3, approved_at = $4, updated_at = $5
-		WHERE id = $6
+		WHERE id = $6 AND status = $7
 	`
 	var approvedByID *string
 	if request.ApprovedByID() != nil {
@@ -247,13 +240,14 @@ func (r *LeaveRequestRepository) updateWithTx(ctx context.Context, tx pgx.Tx, re
 		request.ApprovedAt(),
 		request.UpdatedAt(),
 		request.ID().String(),
+		string(from),
 	)
 	if err != nil {
 		return fmt.Errorf("update leave request: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("leave request not found")
+		return fmt.Errorf("leave request is no longer %s: %w", from, domain.ErrInvalidStatusTransition)
 	}
 
 	return nil
@@ -340,133 +334,44 @@ func (r *LeaveRequestRepository) GetByIDWithTx(ctx context.Context, tx pgx.Tx, t
 	return request, nil
 }
 
-// CreateAndUpdateBalanceAtomically wraps create leave request and update balance in a single transaction.
-// This ensures all-or-nothing semantics: if creation succeeds but balance update fails, the request insert rolls back.
-func (r *LeaveRequestRepository) CreateAndUpdateBalanceAtomically(
-	ctx context.Context,
-	request *domain.LeaveRequest,
-	balance *domain.LeaveBalance,
-	balanceRepo domain.LeaveBalanceRepository,
-) error {
+// CreateAndUpdateBalanceAtomically inserts the request and applies the balance delta in one transaction.
+// A per-employee advisory lock serialises concurrent creations so the overlap check cannot be raced.
+func (r *LeaveRequestRepository) CreateAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, delta domain.BalanceDelta) error {
 	return pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('leave:' || $1::text, 0))`, request.EmployeeID().String()); err != nil {
+			return fmt.Errorf("lock employee leave: %w", err)
+		}
+		var overlaps bool
+		err := tx.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM leave.leave_requests
+				WHERE employee_id = $1 AND status IN ('PENDING', 'APPROVED')
+				  AND start_date <= $3 AND end_date >= $2
+			)`, request.EmployeeID().String(), request.StartDate(), request.EndDate()).Scan(&overlaps)
+		if err != nil {
+			return fmt.Errorf("check leave overlap: %w", err)
+		}
+		if overlaps {
+			return domain.ErrLeaveOverlapExists
+		}
+		if err := applyBalanceDelta(ctx, tx, request, delta); err != nil {
+			return err
+		}
 		if err := r.CreateWithTx(ctx, tx, request); err != nil {
 			return fmt.Errorf("create leave request: %w", err)
 		}
-		// Cast to concrete type to access updateWithTx method
-		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
-			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
-				return fmt.Errorf("update balance: %w", err)
-			}
-		}
 		return nil
 	})
 }
 
-// UpdateAndGetBalanceAtomically updates a leave request and retrieves updated balance in a single transaction.
-// Used for approve/reject/cancel operations where balance state must be consistent.
-func (r *LeaveRequestRepository) UpdateAndGetBalanceAtomically(
-	ctx context.Context,
-	request *domain.LeaveRequest,
-	balanceRepo *LeaveBalanceRepository,
-	tenantID domain.TenantID,
-	employeeID domain.EmployeeID,
-	leaveTypeID domain.LeaveTypeID,
-	year int,
-) (*domain.LeaveBalance, error) {
-	var balance *domain.LeaveBalance
-	err := pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
-		// Get balance for update
-		b, err := balanceRepo.GetByEmployeeAndTypeWithTx(ctx, tx, tenantID, employeeID, leaveTypeID, year)
-		if err != nil {
-			return fmt.Errorf("get balance: %w", err)
-		}
-		if b == nil {
-			return fmt.Errorf("balance not found")
-		}
-		balance = b
-
-		// Update request status
-		if err := r.updateWithTx(ctx, tx, request); err != nil {
-			return fmt.Errorf("update request: %w", err)
-		}
-
-		return nil
-	})
-	return balance, err
-}
-
-// ApproveAndUpdateBalanceAtomically approves a leave request and updates balance in a single transaction.
-// This ensures all-or-nothing semantics: if balance update fails, request approval rolls back.
-func (r *LeaveRequestRepository) ApproveAndUpdateBalanceAtomically(
-	ctx context.Context,
-	request *domain.LeaveRequest,
-	balance *domain.LeaveBalance,
-	balanceRepo domain.LeaveBalanceRepository,
-) error {
+// TransitionAndUpdateBalanceAtomically writes the request's new status (only while it is still from)
+// and applies the balance delta in one transaction.
+func (r *LeaveRequestRepository) TransitionAndUpdateBalanceAtomically(ctx context.Context, request *domain.LeaveRequest, from domain.LeaveStatus, delta domain.BalanceDelta) error {
 	return pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
-		// Update request status (approve)
-		if err := r.updateWithTx(ctx, tx, request); err != nil {
-			return fmt.Errorf("update request: %w", err)
+		if err := r.transitionWithTx(ctx, tx, request, from); err != nil {
+			return err
 		}
-
-		// Update balance (pending -> used)
-		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
-			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
-				return fmt.Errorf("update balance: %w", err)
-			}
-		}
-
-		return nil
-	})
-}
-
-// RejectAndUpdateBalanceAtomically rejects a leave request and updates balance in a single transaction.
-// This ensures all-or-nothing semantics: if balance update fails, request rejection rolls back.
-func (r *LeaveRequestRepository) RejectAndUpdateBalanceAtomically(
-	ctx context.Context,
-	request *domain.LeaveRequest,
-	balance *domain.LeaveBalance,
-	balanceRepo domain.LeaveBalanceRepository,
-) error {
-	return pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
-		// Update request status (reject)
-		if err := r.updateWithTx(ctx, tx, request); err != nil {
-			return fmt.Errorf("update request: %w", err)
-		}
-
-		// Update balance (remove pending)
-		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
-			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
-				return fmt.Errorf("update balance: %w", err)
-			}
-		}
-
-		return nil
-	})
-}
-
-// CancelAndUpdateBalanceAtomically cancels a leave request and updates balance in a single transaction.
-// This ensures all-or-nothing semantics: if balance update fails, request cancellation rolls back.
-func (r *LeaveRequestRepository) CancelAndUpdateBalanceAtomically(
-	ctx context.Context,
-	request *domain.LeaveRequest,
-	balance *domain.LeaveBalance,
-	balanceRepo domain.LeaveBalanceRepository,
-) error {
-	return pgtenant.WithTenantTx(ctx, r.pool, request.TenantID().String(), "", func(tx pgx.Tx) error {
-		// Update request status (cancel)
-		if err := r.updateWithTx(ctx, tx, request); err != nil {
-			return fmt.Errorf("update request: %w", err)
-		}
-
-		// Update balance (remove used or pending)
-		if repo, ok := balanceRepo.(*LeaveBalanceRepository); ok {
-			if err := repo.updateWithTx(ctx, tx, balance); err != nil {
-				return fmt.Errorf("update balance: %w", err)
-			}
-		}
-
-		return nil
+		return applyBalanceDelta(ctx, tx, request, delta)
 	})
 }
 
