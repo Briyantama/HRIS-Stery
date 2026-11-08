@@ -70,30 +70,6 @@ func NewEmployeeCreatedEvent(employee *Employee, actorID string) *EmployeeCreate
 	}
 }
 
-// EmployeeUpdatedEvent is published when an employee is updated.
-type EmployeeUpdatedEvent struct {
-	BaseDomainEvent
-	EmployeeID EmployeeID
-	TenantID   TenantID
-	Email      string
-	FullName   string
-	Status     EmploymentStatus
-	ActorID    string
-}
-
-// NewEmployeeUpdatedEvent creates a new employee updated event.
-func NewEmployeeUpdatedEvent(employee *Employee, actorID string) *EmployeeUpdatedEvent {
-	return &EmployeeUpdatedEvent{
-		BaseDomainEvent: NewBaseDomainEvent("hris.workforce.employee.updated"),
-		EmployeeID:      employee.ID(),
-		TenantID:        employee.TenantID(),
-		Email:           employee.Email(),
-		FullName:        employee.FullName(),
-		Status:          employee.Status(),
-		ActorID:         actorID,
-	}
-}
-
 // EmployeeTerminatedEvent is published when an employee is terminated.
 type EmployeeTerminatedEvent struct {
 	BaseDomainEvent

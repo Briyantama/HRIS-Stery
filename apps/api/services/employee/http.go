@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/employee/application/commands"
@@ -217,8 +216,8 @@ func (h *HTTPHandler) handleListEmployees(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	pageNo, perPage, ok := pageParams(r)
-	if !ok {
+	pageNo, perPage, err := httpx.PageParams(r, defaultPerPage, maxPerPage)
+	if err != nil {
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid pagination")
 		return
 	}
@@ -445,27 +444,6 @@ func fail(w http.ResponseWriter, r *http.Request, err error, conflictMsg string)
 		slog.ErrorContext(r.Context(), "employee request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal error")
 	}
-}
-
-// pageParams reads ?page and ?per_page (defaults 1 and 20, per_page at most 100).
-func pageParams(r *http.Request) (page, perPage int, ok bool) {
-	page, perPage = 1, defaultPerPage
-	q := r.URL.Query()
-	if v := q.Get("page"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			return 0, 0, false
-		}
-		page = n
-	}
-	if v := q.Get("per_page"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > maxPerPage {
-			return 0, 0, false
-		}
-		perPage = n
-	}
-	return page, perPage, true
 }
 
 func unixToRFC3339(sec int64) string { return time.Unix(sec, 0).UTC().Format(time.RFC3339) }

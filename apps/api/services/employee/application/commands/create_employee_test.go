@@ -134,11 +134,6 @@ func newMockEventPublisher() *mockEventPublisher {
 	return &mockEventPublisher{events: []domain.DomainEvent{}}
 }
 
-func (m *mockEventPublisher) PublishAsync(ctx context.Context, event domain.DomainEvent) error {
-	m.events = append(m.events, event)
-	return nil
-}
-
 func (m *mockEventPublisher) PublishSync(ctx context.Context, event domain.DomainEvent) error {
 	m.events = append(m.events, event)
 	return nil

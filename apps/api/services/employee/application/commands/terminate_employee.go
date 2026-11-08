@@ -79,7 +79,7 @@ func (h *TerminateEmployeeHandler) Handle(ctx context.Context, cmd TerminateEmpl
 
 	// Publish event
 	// The row is committed: a lost event must not fail the request, but it must be visible.
-	if err := h.eventPublisher.PublishAsync(ctx, domain.NewEmployeeTerminatedEvent(employee, cmd.ActorID)); err != nil {
+	if err := h.eventPublisher.PublishSync(ctx, domain.NewEmployeeTerminatedEvent(employee, cmd.ActorID)); err != nil {
 		slog.ErrorContext(ctx, "publish employee terminated event", "tenant_id", cmd.TenantID, "employee_id", cmd.EmployeeID, "error", err)
 	}
 
