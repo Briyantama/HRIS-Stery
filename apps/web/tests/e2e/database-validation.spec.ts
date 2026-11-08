@@ -130,7 +130,7 @@ test.describe.skip('Database State Validation', () => {
 		expect(page.url()).toMatch(/\/leaves/);
 	});
 
-	test('role-based access enforced at RLS level', async ({ page, context }) => {
+	test('role-based access enforced at RLS level', async ({ context }) => {
 		// Skip if not in real backend mode
 		if (!process.env.E2E_REAL_BACKEND) {
 			test.skip();
@@ -234,7 +234,7 @@ test.describe('Database Response Validation', () => {
 		// The form should be available, proving the database schema is correct
 		// and the API is responding with valid data structures
 		const leaveTypeSelect = page.locator('select').first();
-		const isVisible = await leaveTypeSelect.isVisible().catch(() => false);
+		await leaveTypeSelect.isVisible().catch(() => false);
 
 		// Even if mocked, the form structure validates the data contract
 		expect(page.url()).toMatch(/\/leaves\/apply/);
@@ -249,7 +249,7 @@ test.describe('Database Response Validation', () => {
 
 		// Verify balance cards are present (proves API response structure)
 		const balanceCard = page.locator('text=/leave balance|entitled|used|pending|remaining/i').first();
-		const isVisible = await balanceCard.isVisible().catch(() => false);
+		await balanceCard.isVisible().catch(() => false);
 
 		// In real backend mode, the balance card would display actual database values
 		// The structure itself validates the response schema

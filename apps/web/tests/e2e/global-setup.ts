@@ -1,5 +1,4 @@
 import { chromium } from '@playwright/test';
-import type { FullConfig } from '@playwright/test';
 
 /**
  * Global setup for E2E tests.
@@ -10,7 +9,7 @@ import type { FullConfig } from '@playwright/test';
  * 3. Pre-configure test mode
  */
 
-async function globalSetup(config: FullConfig) {
+async function globalSetup() {
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:4173';
 
 	console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

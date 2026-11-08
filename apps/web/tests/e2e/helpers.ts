@@ -150,7 +150,7 @@ export async function verifyProtectedRoute(page: Page, path: string) {
 /**
  * Navigate to a role-restricted page and verify redirect to 403 if insufficient role.
  */
-export async function verifyRoleRestrictedRoute(page: Page, path: string, requiredRole: string) {
+export async function verifyRoleRestrictedRoute(page: Page, path: string) {
 	await page.goto(path);
 	// Should redirect to 403 for insufficient role
 	await page.waitForURL(/\/403/);

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, testUsers, submitLeaveRequest } from './helpers';
+import { login, testUsers } from './helpers';
 
 /**
  * E2E tests for leave request workflow.
@@ -162,20 +162,8 @@ test.describe('Leave Workflow Authorization', () => {
 		expect(typeof count).toBe('number');
 	});
 
-	test('manager approvals require authorization header', async ({ page, context }) => {
+	test('manager approvals require authorization header', async ({ page }) => {
 		await login(page, testUsers.manager);
-
-		// Monitor all requests to ensure auth headers are present
-		let authHeaderPresent = false;
-
-		context.on('request', async (request) => {
-			if (request.url().includes('/api/') && request.method() === 'POST') {
-				const authHeader = (await request.headerValue('authorization')) || (await request.headerValue('Authorization'));
-				if (authHeader) {
-					authHeaderPresent = true;
-				}
-			}
-		});
 
 		// Navigate to admin panel and trigger a request
 		await page.goto('/admin/leaves');

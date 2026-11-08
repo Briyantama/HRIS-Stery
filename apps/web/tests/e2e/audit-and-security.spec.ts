@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, logout, testUsers, getAuthCookies, clearAuthCookies } from './helpers';
+import { login, logout, testUsers, getAuthCookies } from './helpers';
 
 /**
  * E2E tests for audit logging and security enforcement.
@@ -16,23 +16,15 @@ test.describe('Audit Logging Verification', () => {
 	test('authenticated requests include Authorization header', async ({ page, context }) => {
 		await login(page, testUsers.employee);
 
-		let foundAuthHeader = false;
 		let requestCount = 0;
 
 		// Monitor requests for Authorization header
-		context.on('request', async (request) => {
+		context.on('request', (request) => {
 			const url = request.url();
-			const method = request.method();
 
 			// Check API requests (not static assets)
 			if (url.includes('/api/') || url.includes('/dashboard')) {
 				requestCount++;
-				const authHeader = (await request.headerValue('authorization')) ||
-					(await request.headerValue('Authorization'));
-
-				if (authHeader && (authHeader.includes('Bearer') || authHeader.includes('token'))) {
-					foundAuthHeader = true;
-				}
 			}
 		});
 
@@ -62,7 +54,7 @@ test.describe('Audit Logging Verification', () => {
 		expect(isVisible).toBe(false);
 	});
 
-	test('logout invalidates session immediately', async ({ page, context }) => {
+	test('logout invalidates session immediately', async ({ page }) => {
 		// Login
 		await login(page, testUsers.employee);
 		expect(page.url()).toMatch(/\/dashboard/);

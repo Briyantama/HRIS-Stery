@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, logout, testUsers, getAuthCookies, clearAuthCookies, verifyProtectedRoute } from './helpers';
+import { login, logout, testUsers, getAuthCookies, verifyProtectedRoute } from './helpers';
 
 /**
  * E2E tests for authentication and RBAC enforcement.
@@ -14,7 +14,7 @@ import { login, logout, testUsers, getAuthCookies, clearAuthCookies, verifyProte
  */
 
 test.describe('Authentication Flow', () => {
-	test('login succeeds with valid employee credentials', async ({ page, context }) => {
+	test('login succeeds with valid employee credentials', async ({ page }) => {
 		await login(page, testUsers.employee);
 
 		// Verify redirect to dashboard
