@@ -48,11 +48,8 @@ async function globalSetup(config: FullConfig) {
 		console.log(`   For full E2E with real backend, run:`);
 		console.log(`   E2E_REAL_BACKEND=1 make test-e2e`);
 		console.log(`\n   This requires:`);
-		console.log(`   - make dev              (start Docker infrastructure)`);
-		console.log(`   - make migrate-up       (run database migrations)`);
-		console.log(`   - make dev-laravel      (start Laravel gateway)`);
-		console.log(`   - make dev-svelte       (start SvelteKit dev server)`);
-		console.log(`   - make dev-apps (after services bootstrapped)`);
+		console.log(`   - make up               (Postgres + Dragonfly, migrations, API on :8000)`);
+		console.log(`   - npm run dev           (SvelteKit dev server, API_URL=http://localhost:8000)`);
 		console.log();
 	}
 

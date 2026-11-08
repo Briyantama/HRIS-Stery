@@ -6,13 +6,8 @@ import { z } from 'zod';
  */
 
 // Enums for leave statuses
-export const LeaveStatus = z.enum([
-	'LEAVE_STATUS_UNSPECIFIED',
-	'LEAVE_STATUS_PENDING',
-	'LEAVE_STATUS_APPROVED',
-	'LEAVE_STATUS_REJECTED',
-	'LEAVE_STATUS_CANCELLED'
-]);
+// The strings the Go leave handler returns.
+export const LeaveStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']);
 
 export type LeaveStatus = z.infer<typeof LeaveStatus>;
 
@@ -33,12 +28,12 @@ export type LeaveTypeCode = z.infer<typeof LeaveTypeCode>;
 // Leave type definition
 export const LeaveTypeSchema = z.object({
 	id: z.string().uuid(),
-	tenant_id: z.string().uuid(),
 	code: z.string(),
 	name: z.string(),
 	max_days_per_year: z.number(),
 	requires_document: z.boolean(),
-	is_paid: z.boolean()
+	is_paid: z.boolean(),
+	is_active: z.boolean()
 });
 
 export type LeaveType = z.infer<typeof LeaveTypeSchema>;
@@ -46,8 +41,6 @@ export type LeaveType = z.infer<typeof LeaveTypeSchema>;
 // Single leave type balance breakdown
 export const LeaveTypeBalanceSchema = z.object({
 	leave_type_id: z.string().uuid(),
-	leave_type_code: z.string(),
-	leave_type_name: z.string(),
 	entitled_days: z.number(),
 	used_days: z.number(),
 	pending_days: z.number(),
@@ -61,7 +54,7 @@ export const LeaveBalanceSchema = z.object({
 	tenant_id: z.string().uuid(),
 	employee_id: z.string().uuid(),
 	year: z.number(),
-	balances: z.array(LeaveTypeBalanceSchema)
+	by_type: z.array(LeaveTypeBalanceSchema)
 });
 
 export type LeaveBalance = z.infer<typeof LeaveBalanceSchema>;
@@ -72,7 +65,7 @@ export const LeaveRequestSchema = z.object({
 	tenant_id: z.string().uuid(),
 	employee_id: z.string().uuid(),
 	leave_type_id: z.string().uuid(),
-	status: z.string(),
+	status: LeaveStatus,
 	start_date: z.string(),
 	end_date: z.string(),
 	days_count: z.number(),
@@ -89,9 +82,10 @@ export type LeaveRequest = z.infer<typeof LeaveRequestSchema>;
 
 // List leave requests response
 export const ListLeaveRequestsResponseSchema = z.object({
-	leave_requests: z.array(LeaveRequestSchema),
-	total_count: z.number(),
-	next_page_token: z.string().nullable()
+	items: z.array(LeaveRequestSchema),
+	page: z.number(),
+	per_page: z.number(),
+	total: z.number()
 });
 
 export type ListLeaveRequestsResponse = z.infer<typeof ListLeaveRequestsResponseSchema>;
@@ -122,21 +116,3 @@ export const RejectLeaveFormSchema = z.object({
 });
 
 export type RejectLeaveForm = z.infer<typeof RejectLeaveFormSchema>;
-
-// API error response
-export const ApiErrorSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	details: z.array(z.string()).optional()
-});
-
-export type ApiError = z.infer<typeof ApiErrorSchema>;
-
-// Generic API response wrapper
-export const ApiResponseSchema = z.object({
-	code: z.string(),
-	message: z.string().optional(),
-	data: z.unknown().optional()
-});
-
-export type ApiResponse = z.infer<typeof ApiResponseSchema>;

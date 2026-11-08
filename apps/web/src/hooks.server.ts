@@ -1,72 +1,46 @@
-import { redirect } from '@sveltejs/kit';
-import type { Handle } from '@sveltejs/kit';
+import { redirect, type Handle } from '@sveltejs/kit';
+import { session } from '$lib/server/session';
+
+const PUBLIC = ['/login', '/register', '/health'];
+
+function clearAndRedirect(event: Parameters<Handle>[0]['event'], path: string): never {
+	session.clear(event.cookies);
+	redirect(303, `/login?error=invalid_session&redirect=${encodeURIComponent(path)}`);
+}
+
+/** Claims come from the access token payload. The API verifies the signature on every call. */
+function claimsFromToken(token: string): App.Locals['user'] | null {
+	try {
+		const seg = token.split('.')[1];
+		const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
+		const c = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))));
+		if (!c?.user_id || !c.tenant_id) return null;
+		return { user_id: c.user_id, tenant_id: c.tenant_id, email: c.email, roles: Array.isArray(c.roles) ? c.roles : [] };
+	} catch {
+		return null;
+	}
+}
 
 /**
- * Server-side authentication and authorization hooks.
- *
- * This hook enforces:
- * 1. Authentication check: redirects unauthenticated users to /login
- * 2. Route protection: (app) group requires active session
- * 3. Role-based access: /admin/leaves requires manager or hr_admin role
- * 4. Session restoration: preserves auth state across page refreshes
+ * Route guard. Pages need a session (HttpOnly cookie set by the login action); /admin needs the
+ * manager or hr_admin role. /api is the BFF proxy and answers 401 itself.
  */
-
 export const handle: Handle = async ({ event, resolve }) => {
-	// Public routes that don't require authentication
-	const publicRoutes = ['/login', '/register', '/health'];
-	const currentPath = event.url.pathname;
+	const path = event.url.pathname;
+	const isPrefix = (p: string) => path === p || path.startsWith(p + '/');
+	if (isPrefix('/api') || PUBLIC.some(isPrefix)) return resolve(event);
 
-	// Check if current route is public
-	const isPublicRoute = publicRoutes.some((route) => currentPath.startsWith(route));
+	const current = session.read(event.cookies);
+	if (!current) redirect(303, `/login?redirect=${encodeURIComponent(path + event.url.search)}`);
 
-	// If public route, skip authentication check
-	if (isPublicRoute) {
-		return resolve(event);
+	const user = claimsFromToken(current.token);
+	if (!user) clearAndRedirect(event, path);
+
+	event.locals.token = current.token;
+	event.locals.user = user;
+
+	if (isPrefix('/admin') && !user.roles.some((r) => r === 'manager' || r === 'hr_admin')) {
+		redirect(303, `/403?requested=${encodeURIComponent(path)}`);
 	}
-
-	// Verify authentication for protected routes
-	const authToken = event.cookies.get('auth_token');
-	const authUserStr = event.cookies.get('auth_user');
-
-	// If accessing protected route without token, redirect to login
-	if (!authToken || !authUserStr) {
-		throw redirect(307, `/login?redirect=${encodeURIComponent(currentPath)}`);
-	}
-
-	// Parse and validate user object
-	let authUser: any;
-	try {
-		authUser = JSON.parse(authUserStr);
-	} catch {
-		// Invalid auth data, clear session and redirect to login
-		event.cookies.delete('auth_token', { path: '/' });
-		event.cookies.delete('auth_user', { path: '/' });
-		throw redirect(307, `/login?error=invalid_session&redirect=${encodeURIComponent(currentPath)}`);
-	}
-
-	// Validate required fields exist
-	if (!authUser.user_id || !authUser.tenant_id) {
-		event.cookies.delete('auth_token', { path: '/' });
-		event.cookies.delete('auth_user', { path: '/' });
-		throw redirect(307, `/login?error=invalid_session&redirect=${encodeURIComponent(currentPath)}`);
-	}
-
-	// Inject auth data into event for use in +page.server.ts files
-	event.locals.token = authToken;
-	event.locals.user = authUser;
-
-	// Role-based route protection: /admin/* routes require manager or hr_admin role
-	if (currentPath.startsWith('/admin')) {
-		const userRoles = authUser.roles || [];
-		const hasRequiredRole = userRoles.some((role: string) =>
-			role.toLowerCase() === 'manager' || role.toLowerCase() === 'hr_admin'
-		);
-
-		if (!hasRequiredRole) {
-			// User is authenticated but lacks required role, redirect to access denied
-			throw redirect(307, `/403?requested=${encodeURIComponent(currentPath)}`);
-		}
-	}
-
 	return resolve(event);
 };

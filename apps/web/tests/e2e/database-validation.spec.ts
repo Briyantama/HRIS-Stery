@@ -11,9 +11,8 @@ import { login, testUsers } from './helpers';
  * - Role-based access is enforced at database level (RLS)
  *
  * Note: Full database validation requires:
- * 1. Real backend running (make dev-laravel + make dev leave-service)
+ * 1. Real backend running (make up)
  * 2. Database connection credentials
- * 3. Access to leave-service database
  *
  * These tests are marked for backend-integration mode (E2E_REAL_BACKEND=1).
  * In mock-auth mode, these tests verify the API response structure instead.
@@ -186,9 +185,9 @@ test.describe.skip('Database State Validation', () => {
 
 		// In real backend mode, would:
 		// 1. Trigger a leave mutation (e.g., approval)
-		// 2. Wait for NATS event to be consumed by audit-service
+		// 2. Wait for the event on the hris:events stream to be consumed by the audit consumer group
 		// 3. Verify audit.processed_events has entry for event_id
-		// 4. Manually re-publish same event to NATS
+		// 4. Manually re-publish the same event to the hris:events stream
 		// 5. Verify idempotency:
 		//    - Second processing skipped (event_id already in processed_events)
 		//    - Only one audit.audit_events entry exists for this event
@@ -208,7 +207,7 @@ test.describe.skip('Database State Validation', () => {
 
 		// In real backend mode, would:
 		// 1. Approve a leave request
-		// 2. Wait for NATS event processing (up to 2 seconds)
+		// 2. Wait for stream event processing (up to 2 seconds)
 		// 3. Query audit.audit_events for corresponding entry:
 		//    - action = 'LEAVE_APPROVED'
 		//    - actor_id = current user

@@ -3,20 +3,21 @@
 	import { user } from '$lib/stores/auth';
 	import { useLeaveTypes, useApplyLeave } from '$lib/queries/leave';
 	import { ApplyLeaveRequestSchema, type ApplyLeaveForm } from '$lib/schemas/leave';
-	import { getErrorMessage, getValidationErrors } from '$lib/api/client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import { getErrorMessage } from '$lib/api/client';
 	import {
+		Alert,
+		Button,
+		Card,
+		CardContent,
+		CardDescription,
+		CardHeader,
+		CardTitle,
+		Input,
+		Label,
 		Select,
-		SelectContent,
-		SelectItem,
-		SelectTrigger,
-		SelectValue
-	} from '$lib/components/ui/select';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-svelte';
+		Textarea
+	} from '@stery/kit/ui';
+	import { CircleAlert, CircleCheck } from '@lucide/svelte';
 
 	// Get current user
 	let userId: string | null = null;
@@ -136,12 +137,6 @@
 			}, 1500);
 		} catch (error) {
 			generalError = getErrorMessage(error);
-
-			// Parse field-level validation errors from backend
-			const backendErrors = getValidationErrors(error);
-			if (Object.keys(backendErrors).length > 0) {
-				fieldErrors = backendErrors;
-			}
 		}
 	}
 
@@ -182,7 +177,7 @@
 	<!-- Page Header -->
 	<div>
 		<h1 class="text-3xl font-bold tracking-tight">Request Leave</h1>
-		<p class="mt-2 text-gray-600">Submit a new leave request to your manager</p>
+		<p class="mt-2 text-muted-foreground">Submit a new leave request to your manager</p>
 	</div>
 
 	<Card>
@@ -195,24 +190,16 @@
 			<form on:submit={handleSubmit} class="space-y-6">
 				<!-- Success Message -->
 				{#if showSuccess}
-					<div class="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-						<CheckCircle2 class="h-5 w-5 text-green-600" />
-						<div>
-							<p class="font-medium text-green-800">Leave request submitted successfully!</p>
-							<p class="text-sm text-green-700">Redirecting to dashboard...</p>
-						</div>
-					</div>
+					<Alert tone="success" title="Leave request submitted successfully!" description="Redirecting to dashboard...">
+						{#snippet icon()}<CircleCheck class="h-5 w-5 text-success" />{/snippet}
+					</Alert>
 				{/if}
 
 				<!-- General Error Message -->
 				{#if generalError}
-					<div class="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-						<AlertCircle class="h-5 w-5 text-red-600" />
-						<div>
-							<p class="font-medium text-red-800">Error submitting leave request</p>
-							<p class="text-sm text-red-700">{generalError}</p>
-						</div>
-					</div>
+					<Alert tone="destructive" title="Error submitting leave request" description={generalError}>
+						{#snippet icon()}<CircleAlert class="h-5 w-5 text-destructive" />{/snippet}
+					</Alert>
 				{/if}
 
 				<!-- Leave Type Selection -->
@@ -220,28 +207,23 @@
 					<Label for="leave-type">Leave Type *</Label>
 
 					{#if $leaveTypes.isLoading}
-						<div class="h-10 rounded-lg border border-gray-300 bg-gray-50"></div>
+						<div class="h-10 rounded-lg border border-input bg-muted"></div>
 					{:else if $leaveTypes.isError}
-						<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+						<Alert tone="destructive">
 							Failed to load leave types: {$leaveTypes.error?.message || 'Unknown error'}
-						</div>
+						</Alert>
 					{:else}
 						<Select
+							id="leave-type"
+							items={($leaveTypes.data ?? []).map((t) => ({ value: t.id, label: t.name }))}
 							value={formData.leave_type_id}
 							onValueChange={(v: string) => (formData.leave_type_id = v)}
-						>
-							<SelectTrigger id="leave-type" class={hasError('leave_type_id') ? 'border-red-500' : ''}>
-								<SelectValue placeholder="Select a leave type..." />
-							</SelectTrigger>
-							<SelectContent>
-								{#each $leaveTypes.data ?? [] as type (type.id)}
-									<SelectItem value={type.id}>{type.name}</SelectItem>
-								{/each}
-							</SelectContent>
-						</Select>
+							placeholder="Select a leave type..."
+							invalid={hasError('leave_type_id')}
+						/>
 
 						{#if hasError('leave_type_id')}
-							<p class="text-sm text-red-600">{getFieldError('leave_type_id')}</p>
+							<p class="text-sm text-destructive">{getFieldError('leave_type_id')}</p>
 						{/if}
 					{/if}
 				</div>
@@ -257,10 +239,10 @@
 							bind:value={formData.start_date}
 							onchange={() => handleFieldChange('start_date')}
 							disabled={$applyLeave.isPending}
-							class={hasError('start_date') ? 'border-red-500' : ''}
+							invalid={hasError('start_date')}
 						/>
 						{#if hasError('start_date')}
-							<p class="text-sm text-red-600">{getFieldError('start_date')}</p>
+							<p class="text-sm text-destructive">{getFieldError('start_date')}</p>
 						{/if}
 					</div>
 
@@ -273,10 +255,10 @@
 							bind:value={formData.end_date}
 							onchange={() => handleFieldChange('end_date')}
 							disabled={$applyLeave.isPending}
-							class={hasError('end_date') ? 'border-red-500' : ''}
+							invalid={hasError('end_date')}
 						/>
 						{#if hasError('end_date')}
-							<p class="text-sm text-red-600">{getFieldError('end_date')}</p>
+							<p class="text-sm text-destructive">{getFieldError('end_date')}</p>
 						{/if}
 					</div>
 				</div>
@@ -287,8 +269,8 @@
 						(new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) /
 							(1000 * 60 * 60 * 24)
 					) + 1}
-					<div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
-						<p class="text-sm font-medium text-blue-900">
+					<div class="rounded-lg border border-info/40 bg-info/10 p-3">
+						<p class="text-sm font-medium text-foreground">
 							Total Leave Days: <span class="text-lg font-bold">{daysCount}</span>
 						</p>
 					</div>
@@ -305,7 +287,7 @@
 						class="min-h-24 resize-none"
 					/>
 					{#if hasError('reason')}
-						<p class="text-sm text-red-600">{getFieldError('reason')}</p>
+						<p class="text-sm text-destructive">{getFieldError('reason')}</p>
 					{/if}
 				</div>
 
@@ -316,12 +298,7 @@
 						disabled={!isFormValid() || $applyLeave.isPending}
 						class="flex-1"
 					>
-						{#if $applyLeave.isPending}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-							Submitting...
-						{:else}
-							Submit Request
-						{/if}
+						{$applyLeave.isPending ? 'Submitting...' : 'Submit Request'}
 					</Button>
 
 					<Button
@@ -338,9 +315,9 @@
 	</Card>
 
 	<!-- Help Text -->
-	<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-		<p class="text-sm font-medium text-gray-700">Need Help?</p>
-		<ul class="mt-2 space-y-1 text-sm text-gray-600">
+	<div class="rounded-lg border border-border bg-muted p-4">
+		<p class="text-sm font-medium text-foreground">Need Help?</p>
+		<ul class="mt-2 space-y-1 text-sm text-muted-foreground">
 			<li>• Select your leave type from the dropdown (Annual, Sick, etc.)</li>
 			<li>• Choose your start and end dates (end date must be on or after start date)</li>
 			<li>• Optionally provide a reason for your leave</li>

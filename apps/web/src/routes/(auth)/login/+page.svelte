@@ -1,103 +1,98 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import type { PageData } from './$types';
-	import { Button } from '$lib/components/ui/button';
-	import { AlertCircle } from 'lucide-svelte';
+	import type { ActionData, PageData } from './$types';
+	import { Alert, Button, Input, Label } from '@stery/kit/ui';
 
-	export let data: PageData;
-	export let form: any;
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	let loading = false;
-
-	$: if (form?.success) {
-		loading = false;
-	}
+	let loading = $state(false);
 </script>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+<div class="min-h-screen flex items-center justify-center bg-background px-4">
 	<div class="max-w-md w-full space-y-8">
 		<!-- Header -->
 		<div class="text-center">
-			<h2 class="mt-6 text-3xl font-bold text-gray-900">Sign in to HRIS</h2>
-			<p class="mt-2 text-sm text-gray-600">Multi-tenant HR Management System</p>
+			<h2 class="mt-6 text-3xl font-bold text-foreground">Sign in to HRIS</h2>
+			<p class="mt-2 text-sm text-muted-foreground">Multi-tenant HR Management System</p>
 		</div>
 
 		<!-- Error Messages -->
 		{#if data.error}
-			<div class="rounded-md bg-red-50 p-4 flex gap-3">
-				<AlertCircle class="w-5 h-5 text-red-600 flex-shrink-0" />
-				<div class="text-sm text-red-700">
-					{#if data.error === 'invalid_session'}
-						Your session is invalid. Please log in again.
-					{:else}
-						{data.error}
-					{/if}
-				</div>
-			</div>
+			<Alert tone="destructive">
+				{#if data.error === 'invalid_session'}
+					Your session is invalid. Please log in again.
+				{:else}
+					{data.error}
+				{/if}
+			</Alert>
 		{/if}
 
 		{#if form?.error}
-			<div class="rounded-md bg-red-50 p-4 flex gap-3">
-				<AlertCircle class="w-5 h-5 text-red-600 flex-shrink-0" />
-				<div class="text-sm text-red-700">{form.error}</div>
-			</div>
+			<Alert tone="destructive">{form.error}</Alert>
 		{/if}
 
 		<!-- Login Form -->
-		<form method="POST" action="?/login" use:enhance={() => {loading = true}} class="space-y-6">
+		<form
+			method="POST"
+			action="?/login"
+			use:enhance={() => {
+				loading = true;
+				return async ({ update }) => {
+					await update();
+					loading = false;
+				};
+			}}
+			class="space-y-6"
+		>
+			<input type="hidden" name="redirect" value={data.redirect ?? ''} />
+			<!-- Organization Field -->
+			<div>
+				<Label for="tenant_slug">Organization</Label>
+				<Input
+					id="tenant_slug"
+					type="text"
+					name="tenant_slug"
+					required
+					autocomplete="organization"
+					placeholder="your-company"
+					disabled={loading}
+					class="mt-1"
+				/>
+			</div>
+
 			<!-- Email Field -->
 			<div>
-				<label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
-				<input
+				<Label for="email">Email address</Label>
+				<Input
 					id="email"
 					type="email"
 					name="email"
 					required
 					placeholder="you@example.com"
 					disabled={loading}
-					class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+					class="mt-1"
 				/>
 			</div>
 
 			<!-- Password Field -->
 			<div>
-				<label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-				<input
+				<Label for="password">Password</Label>
+				<Input
 					id="password"
 					type="password"
 					name="password"
 					required
 					placeholder="••••••••"
 					disabled={loading}
-					class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+					class="mt-1"
 				/>
 			</div>
 
 			<!-- Submit Button -->
-			<Button type="submit" class="w-full" disabled={loading}>
-				{#if loading}
-					<span class="inline-block animate-spin mr-2">⟳</span>
-					Signing in...
-				{:else}
-					Sign in
-				{/if}
+			<Button type="submit" class="w-full" {loading}>
+				{loading ? 'Signing in...' : 'Sign in'}
 			</Button>
 		</form>
 
-		<!-- Demo Credentials -->
-		<div class="rounded-md bg-blue-50 p-4">
-			<p class="text-xs font-medium text-blue-700">Demo Credentials (Development):</p>
-			<ul class="mt-2 text-xs text-blue-600 space-y-1">
-				<li><strong>Employee:</strong> employee@example.com / password</li>
-				<li><strong>Manager:</strong> manager@example.com / password</li>
-				<li><strong>HR Admin:</strong> admin@example.com / password</li>
-			</ul>
-		</div>
 	</div>
 </div>
-
-<style>
-	:global(body) {
-		background-color: rgb(249 250 251);
-	}
-</style>

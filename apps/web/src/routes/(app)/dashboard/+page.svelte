@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { user } from '$lib/stores/auth';
-	import { useLeaveBalance } from '$lib/queries/leave';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { useLeaveBalance, useLeaveTypes } from '$lib/queries/leave';
+	import { Alert, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@stery/kit/ui';
 
 	// Get current user ID from store
 	let userId: string | null = null;
@@ -13,12 +12,16 @@
 	// Fetch leave balance
 	$: leaveBalance = useLeaveBalance(userId);
 
+	// The balance only carries leave_type_id; names and codes come from the tenant's leave types.
+	const leaveTypes = useLeaveTypes();
+	$: typeById = new Map(($leaveTypes.data ?? []).map((t) => [t.id, t]));
+
 	// Get badge color based on remaining days
 	function getRemainingDaysColor(remaining: number, entitled: number): string {
 		const percentage = (remaining / entitled) * 100;
-		if (percentage > 50) return 'bg-green-100 text-green-800';
-		if (percentage > 25) return 'bg-yellow-100 text-yellow-800';
-		return 'bg-red-100 text-red-800';
+		if (percentage > 50) return 'bg-success/15 text-success';
+		if (percentage > 25) return 'bg-warning/15 text-warning';
+		return 'bg-destructive/10 text-destructive';
 	}
 </script>
 
@@ -26,7 +29,7 @@
 	<!-- Page Header -->
 	<div>
 		<h1 class="text-3xl font-bold tracking-tight">Leave Balance</h1>
-		<p class="mt-2 text-gray-600">Your leave entitlements and usage for {new Date().getFullYear()}</p>
+		<p class="mt-2 text-muted-foreground">Your leave entitlements and usage for {new Date().getFullYear()}</p>
 	</div>
 
 	<!-- Loading State -->
@@ -48,12 +51,11 @@
 
 	<!-- Error State -->
 	{#if $leaveBalance.isError}
-		<div class="rounded-lg border border-red-200 bg-red-50 p-4">
-			<p class="text-sm font-medium text-red-800">Unable to load leave balance</p>
-			<p class="mt-1 text-sm text-red-600">
+		<Alert tone="destructive" title="Unable to load leave balance">
+			<p class="text-muted-foreground">
 				{$leaveBalance.error instanceof Error ? $leaveBalance.error.message : 'Unknown error'}
 			</p>
-		</div>
+		</Alert>
 	{/if}
 
 	<!-- Success State -->
@@ -61,35 +63,35 @@
 		{@const balance = $leaveBalance.data}
 
 		<!-- Year Info -->
-		<div class="text-sm text-gray-600">
+		<div class="text-sm text-muted-foreground">
 			Viewing leave balance for year: <span class="font-semibold">{balance.year}</span>
 		</div>
 
 		<!-- Summary Cards Grid -->
-		{#if balance.balances && balance.balances.length > 0}
+		{#if balance.by_type.length > 0}
 			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-				{#each balance.balances as typeBalance (typeBalance.leave_type_id)}
+				{#each balance.by_type as typeBalance (typeBalance.leave_type_id)}
 					<Card>
 						<CardHeader class="pb-3">
-							<CardTitle class="text-base">{typeBalance.leave_type_name}</CardTitle>
-							<CardDescription>{typeBalance.leave_type_code}</CardDescription>
+							<CardTitle class="text-base">{typeById.get(typeBalance.leave_type_id)?.name ?? 'Leave'}</CardTitle>
+							<CardDescription>{typeById.get(typeBalance.leave_type_id)?.code ?? ''}</CardDescription>
 						</CardHeader>
 						<CardContent class="space-y-4">
 							<!-- Entitled Days -->
 							<div>
-								<p class="text-xs font-medium text-gray-500 uppercase">Entitled</p>
+								<p class="text-xs font-medium text-muted-foreground uppercase">Entitled</p>
 								<p class="mt-1 text-2xl font-bold">{typeBalance.entitled_days}</p>
 							</div>
 
 							<!-- Usage Breakdown -->
 							<div class="space-y-2 border-t pt-3">
 								<div class="flex justify-between text-sm">
-									<span class="text-gray-600">Used</span>
+									<span class="text-muted-foreground">Used</span>
 									<span class="font-medium">{typeBalance.used_days}</span>
 								</div>
 								<div class="flex justify-between text-sm">
-									<span class="text-gray-600">Pending</span>
-									<span class="font-medium text-yellow-600">{typeBalance.pending_days}</span>
+									<span class="text-muted-foreground">Pending</span>
+									<span class="font-medium text-warning">{typeBalance.pending_days}</span>
 								</div>
 							</div>
 
@@ -106,16 +108,16 @@
 
 							<!-- Progress Bar -->
 							<div class="space-y-1">
-								<p class="text-xs text-gray-500">Usage</p>
-								<div class="h-2 overflow-hidden rounded-full bg-gray-200">
+								<p class="text-xs text-muted-foreground">Usage</p>
+								<div class="h-2 overflow-hidden rounded-full bg-muted">
 									<div
-										class="h-full bg-blue-500 transition-all"
+										class="h-full bg-primary transition-all"
 										style="width: {((typeBalance.used_days + typeBalance.pending_days) /
 											typeBalance.entitled_days) *
 											100}%"
 									></div>
 								</div>
-								<p class="text-right text-xs text-gray-500">
+								<p class="text-right text-xs text-muted-foreground">
 									{typeBalance.used_days + typeBalance.pending_days} / {typeBalance.entitled_days}
 								</p>
 							</div>
@@ -124,28 +126,25 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
-				<p class="text-gray-600">No leave types configured for your tenant</p>
+			<div class="rounded-lg border border-border bg-muted p-8 text-center">
+				<p class="text-muted-foreground">No leave types configured for your tenant</p>
 			</div>
 		{/if}
 
 		<!-- Legend -->
-		<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-			<p class="text-sm font-medium text-gray-700">Legend</p>
-			<div class="mt-3 space-y-2 text-sm text-gray-600">
+		<div class="rounded-lg border border-border bg-muted p-4">
+			<p class="text-sm font-medium text-foreground">Legend</p>
+			<div class="mt-3 space-y-2 text-sm text-muted-foreground">
 				<div class="flex items-center gap-2">
-					<span class="inline-block h-3 w-3 rounded bg-blue-500"></span>
+					<span class="inline-block h-3 w-3 rounded bg-primary"></span>
 					<span><strong>Used Days:</strong> Already taken leave</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span class="inline-block h-3 w-3 rounded bg-yellow-400"></span>
+					<span class="inline-block h-3 w-3 rounded bg-warning"></span>
 					<span><strong>Pending:</strong> Approved requests awaiting start date</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<span
-						class="inline-block h-3 w-3 rounded"
-						style="background-color: #f0f0f0; border: 1px solid #d0d0d0;"
-					></span>
+					<span class="inline-block h-3 w-3 rounded border border-border bg-surface"></span>
 					<span><strong>Remaining:</strong> Available days to use</span>
 				</div>
 			</div>

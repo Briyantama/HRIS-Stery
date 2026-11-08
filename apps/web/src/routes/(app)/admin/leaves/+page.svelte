@@ -3,18 +3,25 @@
 	import { useLeaveRequests, useApproveLeave, useRejectLeave } from '$lib/queries/leave';
 	import { RejectLeaveFormSchema } from '$lib/schemas/leave';
 	import { getErrorMessage } from '$lib/api/client';
-	import { Button } from '$lib/components/ui/button';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import {
+		Alert,
+		Badge,
+		Button,
+		Card,
+		CardContent,
+		CardHeader,
+		CardTitle,
 		Dialog,
 		DialogContent,
 		DialogDescription,
+		DialogFooter,
 		DialogHeader,
 		DialogTitle,
-		DialogFooter
-	} from '$lib/components/ui/dialog';
-	import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-svelte';
+		Label,
+		Skeleton,
+		Textarea
+	} from '@stery/kit/ui';
+	import { CircleAlert, CircleCheck, X } from '@lucide/svelte';
 
 	// Mutations
 	const approveLeave = useApproveLeave();
@@ -131,20 +138,18 @@
 	}
 
 	/**
-	 * Get badge color for status
+	 * Get badge tone for status
 	 */
-	function getStatusBadgeColor(status: string): string {
+	function getStatusTone(status: string): 'warning' | 'success' | 'destructive' | 'neutral' {
 		switch (status) {
 			case 'PENDING':
-				return 'bg-yellow-100 text-yellow-800';
+				return 'warning';
 			case 'APPROVED':
-				return 'bg-green-100 text-green-800';
+				return 'success';
 			case 'REJECTED':
-				return 'bg-red-100 text-red-800';
-			case 'CANCELLED':
-				return 'bg-gray-100 text-gray-800';
+				return 'destructive';
 			default:
-				return 'bg-gray-100 text-gray-800';
+				return 'neutral';
 		}
 	}
 
@@ -163,15 +168,15 @@
 <!-- RBAC Guard: Only show to managers and HR admins -->
 {#if !$isManager}
 	<div class="mx-auto max-w-4xl py-6">
-		<Card class="border-red-200 bg-red-50">
+		<Card class="border-destructive/40 bg-destructive/10">
 			<CardHeader>
-				<CardTitle class="flex items-center gap-2 text-red-800">
-					<AlertCircle class="h-5 w-5" />
+				<CardTitle class="flex items-center gap-2 text-destructive">
+					<CircleAlert class="h-5 w-5" />
 					Access Denied
 				</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<p class="text-sm text-red-700">
+				<p class="text-sm text-destructive">
 					You do not have permission to access the leave approval portal. Only managers and HR administrators
 					can view and manage leave requests.
 				</p>
@@ -184,22 +189,22 @@
 		<!-- Page Header -->
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">Leave Approval Portal</h1>
-			<p class="mt-2 text-gray-600">Review and manage pending leave requests for your team</p>
+			<p class="mt-2 text-muted-foreground">Review and manage pending leave requests for your team</p>
 		</div>
 
 		<!-- Success Toast -->
 		{#if showSuccessToast}
-			<div class="fixed right-4 top-4 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 shadow-lg">
-				<CheckCircle2 class="h-5 w-5 text-green-600" />
-				<p class="text-sm font-medium text-green-800">{successMessage}</p>
-				<button on:click={() => (showSuccessToast = false)} class="text-green-600 hover:text-green-700">
+			<div class="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-lg border border-success/40 bg-surface p-4 shadow-lg">
+				<CircleCheck class="h-5 w-5 text-success" />
+				<p class="text-sm font-medium text-foreground">{successMessage}</p>
+				<button on:click={() => (showSuccessToast = false)} class="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
 					<X class="h-4 w-4" />
 				</button>
 			</div>
 		{/if}
 
 		<!-- Status Filter Tabs -->
-		<div class="flex gap-2 border-b border-gray-200">
+		<div class="flex gap-2 border-b border-border">
 			{#each [
 				{ label: 'Pending', value: 'PENDING' as const },
 				{ label: 'Approved', value: 'APPROVED' as const },
@@ -209,8 +214,8 @@
 					on:click={() => (statusFilter = tab.value)}
 					class={`px-4 py-2 font-medium transition-colors ${
 						statusFilter === tab.value
-							? 'border-b-2 border-blue-500 text-blue-600'
-							: 'text-gray-600 hover:text-gray-900'
+							? 'border-b-2 border-primary text-primary'
+							: 'text-muted-foreground hover:text-foreground'
 					}`}
 				>
 					{tab.label}
@@ -225,48 +230,40 @@
 					<Card>
 						<CardContent class="py-6">
 							<div class="space-y-3">
-								<div class="h-4 w-32 rounded bg-gray-200"></div>
-								<div class="h-3 w-48 rounded bg-gray-100"></div>
-								<div class="h-3 w-40 rounded bg-gray-100"></div>
+								<Skeleton class="h-4 w-32" />
+								<Skeleton class="h-3 w-48" />
+								<Skeleton class="h-3 w-40" />
 							</div>
 						</CardContent>
 					</Card>
 				{/each}
 			</div>
 		{:else if $leaveRequests.isError}
-			<Card class="border-red-200 bg-red-50">
-				<CardHeader>
-					<CardTitle class="flex items-center gap-2 text-red-800">
-						<AlertCircle class="h-5 w-5" />
-						Error Loading Requests
-					</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<p class="text-sm text-red-700">{getErrorMessage($leaveRequests.error)}</p>
-				</CardContent>
-			</Card>
-		{:else if !$leaveRequests.data?.leave_requests || $leaveRequests.data.leave_requests.length === 0}
+			<Alert tone="destructive" title="Error Loading Requests" description={getErrorMessage($leaveRequests.error)}>
+				{#snippet icon()}<CircleAlert class="h-5 w-5 text-destructive" />{/snippet}
+			</Alert>
+		{:else if !$leaveRequests.data?.items || $leaveRequests.data.items.length === 0}
 			<Card>
 				<CardContent class="py-8 text-center">
-					<p class="text-gray-600">No {statusFilter.toLowerCase()} leave requests to display</p>
+					<p class="text-muted-foreground">No {statusFilter.toLowerCase()} leave requests to display</p>
 				</CardContent>
 			</Card>
 		{:else}
 			<!-- Leave Requests List -->
 			<div class="space-y-4">
-				{#each $leaveRequests.data.leave_requests as leave (leave.id)}
+				{#each $leaveRequests.data.items as leave (leave.id)}
 					<Card>
 						<CardContent class="py-6">
 							<!-- Request Header -->
 							<div class="mb-4 flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
 								<div>
 									<div class="flex items-center gap-3">
-										<h3 class="font-semibold text-gray-900">{leave.reason || 'Leave Request'}</h3>
-										<span class={`rounded-full px-3 py-1 text-xs font-medium ${getStatusBadgeColor(leave.status)}`}>
+										<h3 class="font-semibold text-foreground">{leave.reason || 'Leave Request'}</h3>
+										<Badge tone={getStatusTone(leave.status)} class="rounded-full px-3 py-1">
 											{leave.status}
-										</span>
+										</Badge>
 									</div>
-									<p class="mt-1 text-sm text-gray-600">
+									<p class="mt-1 text-sm text-muted-foreground">
 										Requested by: <span class="font-medium">{leave.employee_id}</span>
 									</p>
 								</div>
@@ -276,37 +273,37 @@
 							<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 								<!-- Dates -->
 								<div>
-									<p class="text-xs font-medium text-gray-500 uppercase">Dates</p>
-									<p class="mt-1 text-sm font-medium text-gray-900">
+									<p class="text-xs font-medium text-muted-foreground uppercase">Dates</p>
+									<p class="mt-1 text-sm font-medium text-foreground">
 										{formatDate(leave.start_date)} - {formatDate(leave.end_date)}
 									</p>
-									<p class="text-xs text-gray-600">
+									<p class="text-xs text-muted-foreground">
 										({calculateDays(leave.start_date, leave.end_date)} days)
 									</p>
 								</div>
 
 								<!-- Leave Type -->
 								<div>
-									<p class="text-xs font-medium text-gray-500 uppercase">Leave Type</p>
-									<p class="mt-1 text-sm font-medium text-gray-900">{leave.leave_type_id}</p>
+									<p class="text-xs font-medium text-muted-foreground uppercase">Leave Type</p>
+									<p class="mt-1 text-sm font-medium text-foreground">{leave.leave_type_id}</p>
 								</div>
 
 								<!-- Status Info -->
 								<div>
-									<p class="text-xs font-medium text-gray-500 uppercase">
+									<p class="text-xs font-medium text-muted-foreground uppercase">
 										{leave.status === 'APPROVED' ? 'Approved' : leave.status === 'REJECTED' ? 'Rejected' : 'Status'}
 									</p>
 									{#if leave.status === 'APPROVED' && leave.approved_at}
-										<p class="mt-1 text-xs text-gray-600">on {formatDate(leave.approved_at)}</p>
+										<p class="mt-1 text-xs text-muted-foreground">on {formatDate(leave.approved_at)}</p>
 										{#if leave.approved_by_id}
-											<p class="text-xs text-gray-600">by {leave.approved_by_id}</p>
+											<p class="text-xs text-muted-foreground">by {leave.approved_by_id}</p>
 										{/if}
 									{:else if leave.status === 'REJECTED' && leave.rejection_reason}
-										<p class="mt-1 text-xs text-gray-600">{leave.rejection_reason}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{leave.rejection_reason}</p>
 									{:else if leave.status === 'PENDING'}
-										<p class="mt-1 text-xs text-yellow-600">Awaiting approval</p>
+										<p class="mt-1 text-xs text-warning">Awaiting approval</p>
 									{:else}
-										<p class="mt-1 text-xs text-gray-600">—</p>
+										<p class="mt-1 text-xs text-muted-foreground">—</p>
 									{/if}
 								</div>
 
@@ -315,25 +312,19 @@
 									<div class="flex gap-2 pt-4 md:col-span-2 lg:col-span-1">
 										<Button
 											size="sm"
-											variant="default"
+											variant="primary"
 											onclick={() => handleApprove(leave.id)}
-											disabled={$approveLeave.isPending}
+											loading={$approveLeave.isPending}
 											class="flex-1"
 										>
-											{#if $approveLeave.isPending}
-												<Loader2 class="mr-1 h-3 w-3 animate-spin" />
-											{/if}
 											Approve
 										</Button>
 										<Button
 											size="sm"
 											variant="destructive"
 											onclick={() => openRejectModal(leave.id)}
-											disabled={$rejectLeave.isPending}
+											loading={$rejectLeave.isPending}
 										>
-											{#if $rejectLeave.isPending}
-												<Loader2 class="mr-1 h-3 w-3 animate-spin" />
-											{/if}
 											Reject
 										</Button>
 									</div>
@@ -342,9 +333,9 @@
 
 							<!-- Reason (if provided) -->
 							{#if leave.reason && leave.status === 'PENDING'}
-								<div class="mt-4 border-t border-gray-200 pt-4">
-									<p class="text-xs font-medium text-gray-500 uppercase">Employee Reason</p>
-									<p class="mt-1 text-sm text-gray-700">{leave.reason}</p>
+								<div class="mt-4 border-t border-border pt-4">
+									<p class="text-xs font-medium text-muted-foreground uppercase">Employee Reason</p>
+									<p class="mt-1 text-sm text-foreground">{leave.reason}</p>
 								</div>
 							{/if}
 						</CardContent>
@@ -353,9 +344,9 @@
 			</div>
 
 			<!-- Pagination Info -->
-			{#if $leaveRequests.data.total_count > 0}
-				<div class="text-center text-sm text-gray-600">
-					Showing {$leaveRequests.data.leave_requests.length} of {$leaveRequests.data.total_count} requests
+			{#if $leaveRequests.data.total > 0}
+				<div class="text-center text-sm text-muted-foreground">
+					Showing {$leaveRequests.data.items.length} of {$leaveRequests.data.total} requests
 				</div>
 			{/if}
 		{/if}
@@ -372,24 +363,22 @@
 			<div class="space-y-4 py-4">
 				<!-- General Error -->
 				{#if rejectGeneralError}
-					<div class="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
-						<AlertCircle class="h-4 w-4 text-red-600" />
-						<p class="text-sm text-red-700">{rejectGeneralError}</p>
-					</div>
+					<Alert tone="destructive">{rejectGeneralError}</Alert>
 				{/if}
 
 				<!-- Rejection Reason Textarea -->
 				<div class="space-y-2">
-					<label for="reject-reason" class="text-sm font-medium text-gray-900">Rejection Reason *</label>
+					<Label for="reject-reason">Rejection Reason *</Label>
 					<Textarea
 						id="reject-reason"
 						placeholder="Explain why you are rejecting this leave request..."
 						bind:value={rejectReason}
 						disabled={$rejectLeave.isPending}
-						class={`min-h-24 resize-none ${rejectErrors.reason ? 'border-red-500' : ''}`}
+						invalid={!!rejectErrors.reason}
+						class="min-h-24 resize-none"
 					/>
 					{#if rejectErrors.reason}
-						<p class="text-sm text-red-600">{rejectErrors.reason[0]}</p>
+						<p class="text-sm text-destructive">{rejectErrors.reason[0]}</p>
 					{/if}
 				</div>
 			</div>
@@ -405,17 +394,12 @@
 				<Button
 					variant="destructive"
 					onclick={handleRejectSubmit}
-					disabled={!rejectReason.trim() || $rejectLeave.isPending}
+					disabled={!rejectReason.trim()}
+					loading={$rejectLeave.isPending}
 				>
-					{#if $rejectLeave.isPending}
-						<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-						Rejecting...
-					{:else}
-						Reject
-					{/if}
+					{$rejectLeave.isPending ? 'Rejecting...' : 'Reject'}
 				</Button>
 			</DialogFooter>
 		</DialogContent>
 	</Dialog>
 {/if}
-
