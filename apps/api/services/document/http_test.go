@@ -197,3 +197,25 @@ func TestStatusCodes(t *testing.T) {
 		})
 	}
 }
+
+func TestDownloadCarriesViewer(t *testing.T) {
+	for tok, want := range map[string]domain.Viewer{
+		userTok:  {UserID: "u-1"},
+		adminTok: {UserID: "a-1", HR: true},
+	} {
+		s := &stub{}
+		if rec := do(newMux(s), "GET", "/api/v1/documents/f-1/download", tok, ""); rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d", tok, rec.Code)
+		}
+		if s.gotURL.Viewer != want {
+			t.Errorf("%s: viewer %+v, want %+v", tok, s.gotURL.Viewer, want)
+		}
+	}
+}
+
+func TestDownloadForbiddenDocumentIsNotFound(t *testing.T) {
+	rec := do(newMux(&stub{err: domain.ErrDocumentNotFound}), "GET", "/api/v1/documents/f-1/download", userTok, "")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status %d", rec.Code)
+	}
+}

@@ -10,6 +10,7 @@ import (
 // GetDocumentMetadataQuery captures metadata request
 type GetDocumentMetadataQuery struct {
 	TenantID        string
+	Viewer          domain.Viewer
 	DocumentID      string
 	IncludeVersions bool
 }
@@ -49,6 +50,9 @@ func (h *GetDocumentMetadataHandler) Handle(ctx context.Context, query GetDocume
 	doc, err := h.docRepo.GetDocumentByID(ctx, tenantID, docID)
 	if err != nil {
 		return nil, err
+	}
+	if !query.Viewer.CanView(doc) {
+		return nil, domain.ErrDocumentNotFound
 	}
 
 	result := &GetDocumentMetadataResult{Document: toDTO(doc), Versions: []DocumentVersionDTO{}}

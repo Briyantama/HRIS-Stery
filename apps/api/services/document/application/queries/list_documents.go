@@ -11,9 +11,10 @@ import (
 // ListDocumentsQuery captures list request
 type ListDocumentsQuery struct {
 	TenantID   string
-	EntityType string // optional filter, requires EntityID
-	EntityID   string // optional filter, requires EntityType
-	Search     string // optional file name search
+	Viewer     domain.Viewer // the caller; non-HR viewers get only their own documents
+	EntityType string        // optional filter, requires EntityID
+	EntityID   string        // optional filter, requires EntityType
+	Search     string        // optional file name search
 	PageSize   int32
 	Offset     int32
 }
@@ -80,7 +81,7 @@ func (h *ListDocumentsHandler) Handle(ctx context.Context, query ListDocumentsQu
 	var err error
 	switch {
 	case query.Search != "":
-		docs, total, err = h.docRepo.SearchDocuments(ctx, tenantID, query.Search, int(query.PageSize), int(query.Offset))
+		docs, total, err = h.docRepo.SearchDocuments(ctx, tenantID, query.Viewer, query.Search, int(query.PageSize), int(query.Offset))
 	case query.EntityType != "" && query.EntityID != "":
 		if !domain.ValidateEntityType(domain.EntityType(query.EntityType)) {
 			return nil, fmt.Errorf("%w: %w", domain.ErrInvalidInput, domain.ErrInvalidEntityType)
@@ -88,7 +89,7 @@ func (h *ListDocumentsHandler) Handle(ctx context.Context, query ListDocumentsQu
 		if _, perr := uuid.Parse(query.EntityID); perr != nil {
 			return nil, fmt.Errorf("%w: entity_id must be a uuid", domain.ErrInvalidInput)
 		}
-		docs, total, err = h.docRepo.GetDocumentsByEntity(ctx, tenantID, domain.EntityType(query.EntityType), query.EntityID, int(query.PageSize), int(query.Offset))
+		docs, total, err = h.docRepo.GetDocumentsByEntity(ctx, tenantID, query.Viewer, domain.EntityType(query.EntityType), query.EntityID, int(query.PageSize), int(query.Offset))
 	default:
 		return nil, fmt.Errorf("%w: entity filter or search query required", domain.ErrInvalidInput)
 	}

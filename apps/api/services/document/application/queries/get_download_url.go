@@ -17,6 +17,7 @@ const (
 // GetDownloadURLQuery asks for a time-limited download URL. VersionNumber 0 means the current version.
 type GetDownloadURLQuery struct {
 	TenantID      string
+	Viewer        domain.Viewer
 	DocumentID    string
 	VersionNumber int32
 	ExpirySeconds int32 // 0 = one hour
@@ -60,7 +61,7 @@ func (h *GetDownloadURLHandler) Handle(ctx context.Context, q GetDownloadURLQuer
 	if err != nil {
 		return nil, err
 	}
-	if doc.IsDeleted() {
+	if doc.IsDeleted() || !q.Viewer.CanView(doc) {
 		return nil, domain.ErrDocumentNotFound
 	}
 	number := q.VersionNumber

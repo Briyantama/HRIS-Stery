@@ -10,11 +10,11 @@ type DocumentRepository interface {
 	// GetDocumentByID retrieves a document by ID (tenant-scoped); ErrDocumentNotFound when absent
 	GetDocumentByID(ctx context.Context, tenantID TenantID, docID DocumentID) (*DocumentFile, error)
 
-	// GetDocumentsByEntity retrieves documents for an entity (pagination)
-	GetDocumentsByEntity(ctx context.Context, tenantID TenantID, entityType EntityType, entityID string, limit, offset int) ([]*DocumentFile, int, error)
+	// GetDocumentsByEntity retrieves the documents of an entity that the viewer may see (pagination)
+	GetDocumentsByEntity(ctx context.Context, tenantID TenantID, viewer Viewer, entityType EntityType, entityID string, limit, offset int) ([]*DocumentFile, int, error)
 
-	// SearchDocuments searches documents by file name
-	SearchDocuments(ctx context.Context, tenantID TenantID, query string, limit, offset int) ([]*DocumentFile, int, error)
+	// SearchDocuments searches documents the viewer may see by file name
+	SearchDocuments(ctx context.Context, tenantID TenantID, viewer Viewer, query string, limit, offset int) ([]*DocumentFile, int, error)
 
 	// UpdateDocumentStatus updates file status (uploaded, scanned, deleted, etc.)
 	UpdateDocumentStatus(ctx context.Context, tenantID TenantID, docID DocumentID, status FileStatus) error

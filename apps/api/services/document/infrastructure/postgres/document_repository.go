@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
@@ -64,14 +65,26 @@ func (r *DocumentRepository) GetDocumentByID(ctx context.Context, tenantID domai
 	return doc, nil
 }
 
-// GetDocumentsByEntity retrieves documents for an entity with pagination
-func (r *DocumentRepository) GetDocumentsByEntity(ctx context.Context, tenantID domain.TenantID, entityType domain.EntityType, entityID string, limit, offset int) ([]*domain.DocumentFile, int, error) {
-	return r.list(ctx, tenantID, `tenant_id = $1 AND entity_type = $2 AND entity_id = $3`, []any{tenantID.String(), string(entityType), entityID}, limit, offset)
+// GetDocumentsByEntity retrieves the documents of an entity that the viewer may see, with pagination
+func (r *DocumentRepository) GetDocumentsByEntity(ctx context.Context, tenantID domain.TenantID, viewer domain.Viewer, entityType domain.EntityType, entityID string, limit, offset int) ([]*domain.DocumentFile, int, error) {
+	where, args := restrictTo(viewer, `tenant_id = $1 AND entity_type = $2 AND entity_id = $3`, []any{tenantID.String(), string(entityType), entityID})
+	return r.list(ctx, tenantID, where, args, limit, offset)
 }
 
-// SearchDocuments searches documents by file name with pagination
-func (r *DocumentRepository) SearchDocuments(ctx context.Context, tenantID domain.TenantID, query string, limit, offset int) ([]*domain.DocumentFile, int, error) {
-	return r.list(ctx, tenantID, `tenant_id = $1 AND file_name ILIKE $2`, []any{tenantID.String(), "%" + query + "%"}, limit, offset)
+// SearchDocuments searches the documents the viewer may see by file name, with pagination
+func (r *DocumentRepository) SearchDocuments(ctx context.Context, tenantID domain.TenantID, viewer domain.Viewer, query string, limit, offset int) ([]*domain.DocumentFile, int, error) {
+	where, args := restrictTo(viewer, `tenant_id = $1 AND file_name ILIKE $2`, []any{tenantID.String(), "%" + query + "%"})
+	return r.list(ctx, tenantID, where, args, limit, offset)
+}
+
+// restrictTo narrows a list query to what the viewer may see; it is domain.Viewer.CanView in SQL.
+func restrictTo(v domain.Viewer, where string, args []any) (string, []any) {
+	if v.HR {
+		return where, args
+	}
+	args = append(args, strings.ToLower(v.UserID))
+	n := len(args)
+	return fmt.Sprintf(`%s AND classification <> 'SECRET' AND (uploaded_by::text = $%d OR (entity_type = 'EMPLOYEE' AND entity_id::text = $%d))`, where, n, n), args
 }
 
 func (r *DocumentRepository) list(ctx context.Context, tenantID domain.TenantID, where string, args []any, limit, offset int) ([]*domain.DocumentFile, int, error) {

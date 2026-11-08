@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/application/commands"
 	"github.com/Briyantama/HRIS-Stery/services/document/application/queries"
@@ -18,6 +20,7 @@ const (
 	maxBody        = 1 << 20 // the body is only metadata; the file itself goes straight to the bucket
 	defaultPerPage = 20
 	maxPerPage     = 100
+	roleHRAdmin    = "hr_admin"
 )
 
 type uploader interface {
@@ -59,7 +62,7 @@ func NewHTTPHandler(u uploader, l lister, m metadataGetter, g urlGetter, d delet
 // rollback additionally require hr_admin.
 func (h *HTTPHandler) Register(mux *http.ServeMux) {
 	auth := authn.Authenticate(h.verifier)
-	admin := authn.WithRole("hr_admin")
+	admin := authn.WithRole(roleHRAdmin)
 	mux.Handle("POST /api/v1/documents", auth(http.HandlerFunc(h.uploadDocument)))
 	mux.Handle("GET /api/v1/documents", auth(http.HandlerFunc(h.listDocuments)))
 	mux.Handle("GET /api/v1/documents/{file_id}/download", auth(http.HandlerFunc(h.download)))
@@ -127,6 +130,11 @@ type listData struct {
 	Total   int32                 `json:"total"`
 }
 
+// viewerOf turns the token claims into the identity the access rule works on.
+func viewerOf(c authn.Claims) domain.Viewer {
+	return domain.Viewer{UserID: c.UserID, HR: slices.ContainsFunc(c.Roles, func(r string) bool { return strings.EqualFold(r, roleHRAdmin) })}
+}
+
 func (h *HTTPHandler) listDocuments(w http.ResponseWriter, r *http.Request) {
 	claims, _ := authn.FromContext(r.Context())
 	q := r.URL.Query()
@@ -139,6 +147,7 @@ func (h *HTTPHandler) listDocuments(w http.ResponseWriter, r *http.Request) {
 	perPage = min(perPage, maxPerPage)
 	res, err := h.list.Handle(r.Context(), queries.ListDocumentsQuery{
 		TenantID:   claims.TenantID,
+		Viewer:     viewerOf(claims),
 		EntityType: q.Get("entity_type"),
 		EntityID:   q.Get("entity_id"),
 		Search:     q.Get("search"),
@@ -176,7 +185,7 @@ func (h *HTTPHandler) download(w http.ResponseWriter, r *http.Request) {
 		version = int32(n)
 	}
 	res, err := h.url.Handle(r.Context(), queries.GetDownloadURLQuery{
-		TenantID: claims.TenantID, DocumentID: r.PathValue("file_id"), VersionNumber: version,
+		TenantID: claims.TenantID, Viewer: viewerOf(claims), DocumentID: r.PathValue("file_id"), VersionNumber: version,
 	})
 	if err != nil {
 		fail(w, r, err)
@@ -197,7 +206,7 @@ func (h *HTTPHandler) getMetadata(w http.ResponseWriter, r *http.Request) {
 		include = b
 	}
 	res, err := h.metadata.Handle(r.Context(), queries.GetDocumentMetadataQuery{
-		TenantID: claims.TenantID, DocumentID: r.PathValue("file_id"), IncludeVersions: include,
+		TenantID: claims.TenantID, Viewer: viewerOf(claims), DocumentID: r.PathValue("file_id"), IncludeVersions: include,
 	})
 	if err != nil {
 		fail(w, r, err)
@@ -222,7 +231,7 @@ func (h *HTTPHandler) presign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := h.url.Handle(r.Context(), queries.GetDownloadURLQuery{
-		TenantID: claims.TenantID, DocumentID: r.PathValue("file_id"), VersionNumber: body.VersionNumber, ExpirySeconds: body.ExpirationSeconds,
+		TenantID: claims.TenantID, Viewer: viewerOf(claims), DocumentID: r.PathValue("file_id"), VersionNumber: body.VersionNumber, ExpirySeconds: body.ExpirationSeconds,
 	})
 	if err != nil {
 		fail(w, r, err)
