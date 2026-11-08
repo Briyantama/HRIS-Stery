@@ -28,7 +28,6 @@ jobs:
         with:
           repository: Briyantama/stery-kit
           path: stery-kit
-          token: ${{ secrets.STERY_KIT_TOKEN }}
           persist-credentials: false
       - uses: docker/login-action@v3
         with:
