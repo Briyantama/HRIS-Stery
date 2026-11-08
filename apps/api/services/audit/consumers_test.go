@@ -44,9 +44,13 @@ func TestConsumers_RecordOnceAndRetryOnFailure(t *testing.T) {
 		t.Fatalf("entries = %d, err = %v; want 1", n, err)
 	}
 
-	// Missing actor: the handler must fail so the entry stays pending.
+	// Missing actor: recorded as "system" so the event is not retried forever.
 	env.EventID, env.ActorID = uuid.NewString(), ""
-	if err := h(ctx, env); err == nil {
-		t.Fatal("expected error for an event without actor_id")
+	if err := h(ctx, env); err != nil {
+		t.Fatalf("event without actor_id: %v", err)
+	}
+	var actor string
+	if err := pool.QueryRow(ctx, `SELECT actor_id FROM audit.entries WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`, tenant).Scan(&actor); err != nil || actor != "system" {
+		t.Fatalf("actor = %q, err = %v; want system", actor, err)
 	}
 }

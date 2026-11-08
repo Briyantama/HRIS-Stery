@@ -24,7 +24,11 @@ func (h *GetAuditEntryHandlerImpl) Handle(ctx context.Context, tenantID, entryID
 	if err != nil {
 		return nil, domain.ErrAuditEntryNotFound // a malformed id cannot exist
 	}
-	e, err := h.repo.GetByID(ctx, domain.MustNewTenantID(tenantID), id)
+	tid := domain.MustNewTenantID(tenantID)
+	if tid.IsZero() {
+		return nil, domain.ErrInvalidTenantID
+	}
+	e, err := h.repo.GetByID(ctx, tid, id)
 	if err != nil {
 		return nil, err
 	}

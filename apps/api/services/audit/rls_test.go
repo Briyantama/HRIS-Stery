@@ -27,7 +27,7 @@ func TestEntries_RLSAndDefaultPartition(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback(ctx)
+		defer func() { _ = tx.Rollback(ctx) }()
 		if _, err := tx.Exec(ctx, `SET LOCAL ROLE hris_app`); err != nil {
 			return err
 		}

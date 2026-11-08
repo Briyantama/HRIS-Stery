@@ -143,6 +143,12 @@ func (h *HTTPHandler) listEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	if s := q.Get("resource_id"); s != "" {
+		if _, err := uuid.Parse(s); err != nil {
+			httpx.WriteError(w, http.StatusUnprocessableEntity, "resource_id must be a uuid")
+			return
+		}
+	}
 	page, perPage, ok := pagination(q.Get("page"), q.Get("per_page"))
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
@@ -208,6 +214,8 @@ func (h *HTTPHandler) fail(w http.ResponseWriter, r *http.Request, tenantID stri
 		httpx.WriteError(w, http.StatusNotFound, "audit entry not found")
 	case errors.Is(err, domain.ErrInvalidTenantID):
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid tenant")
+	case errors.Is(err, domain.ErrInvalidEntry):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, err.Error())
 	default:
 		slog.ErrorContext(r.Context(), "audit request failed", "tenant_id", tenantID, "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal error")

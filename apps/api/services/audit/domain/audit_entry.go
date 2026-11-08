@@ -53,13 +53,13 @@ func NewAuditEntry(
 		return nil, ErrInvalidTenantID
 	}
 	if actorID == "" {
-		return nil, fmt.Errorf("actor_id required")
+		return nil, fmt.Errorf("%w: actor_id required", ErrInvalidEntry)
 	}
 	if action == "" {
-		return nil, fmt.Errorf("action required")
+		return nil, fmt.Errorf("%w: action required", ErrInvalidEntry)
 	}
 	if resourceType == "" {
-		return nil, fmt.Errorf("resource_type required")
+		return nil, fmt.Errorf("%w: resource_type required", ErrInvalidEntry)
 	}
 
 	return &AuditEntry{

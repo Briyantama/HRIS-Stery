@@ -66,9 +66,13 @@ func handleEvent(ctx context.Context, pool *pgxpool.Pool, rec commands.RecordAud
 		return fmt.Errorf("check processed_events: %w", err)
 	}
 
+	actor := env.ActorID
+	if actor == "" {
+		actor = "system" // events without an actor must not poison the stream
+	}
 	res, err := rec.Handle(ctx, commands.RecordAuditCommand{
 		TenantID:     env.TenantID,
-		ActorID:      env.ActorID,
+		ActorID:      actor,
 		Action:       m.action,
 		ResourceType: m.resourceType,
 		Description:  m.description,

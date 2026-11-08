@@ -104,7 +104,7 @@ func (r *AuditRepository) Query(ctx context.Context, tenantID domain.TenantID, f
 		add("actor_id", filters.ActorID)
 		add("action", string(filters.Action))
 		add("resource_type", string(filters.ResourceType))
-		add("resource_id::text", filters.ResourceID)
+		add("resource_id", filters.ResourceID) // uuid column; compared as uuid so its index is usable
 
 		if err := tx.QueryRow(ctx, "SELECT COUNT(*) FROM audit.entries WHERE "+where, args...).Scan(&total); err != nil {
 			return fmt.Errorf("count audit entries: %w", err)

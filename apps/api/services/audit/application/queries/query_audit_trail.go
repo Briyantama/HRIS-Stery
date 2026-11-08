@@ -67,6 +67,9 @@ func NewQueryAuditTrailHandler(repo domain.AuditRepository) QueryAuditTrailHandl
 
 func (h *QueryAuditTrailHandlerImpl) Handle(ctx context.Context, filters AuditQueryFilters) (*QueryAuditTrailResult, error) {
 	tenantID := domain.MustNewTenantID(filters.TenantID)
+	if tenantID.IsZero() {
+		return nil, domain.ErrInvalidTenantID
+	}
 
 	queryFilters := domain.QueryFilters{
 		ActorID:      filters.ActorID,
