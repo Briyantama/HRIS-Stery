@@ -9,6 +9,7 @@ import (
 
 	"github.com/Briyantama/stery-kit/go/pgtenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Briyantama/HRIS-Stery/services/attendance/domain"
@@ -84,6 +85,10 @@ func (r *AttendanceRepository) Create(ctx context.Context, a *domain.AttendanceR
 			string(a.Status()), a.WorkDurationMins(), a.Notes(), a.CreatedBy(), a.IsOverride(),
 			a.CreatedAt(), a.UpdatedAt(),
 		)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // attendance_unique_per_day: concurrent check-in
+			return domain.ErrCannotCheckInTwiceSameDay
+		}
 		if err != nil {
 			return fmt.Errorf("insert attendance: %w", err)
 		}

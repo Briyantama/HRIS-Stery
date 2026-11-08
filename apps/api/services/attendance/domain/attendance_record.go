@@ -195,7 +195,7 @@ func (a *AttendanceRecord) Override(
 	reason string,
 ) error {
 	if !status.IsValid() {
-		return ErrInvalidDate
+		return ErrInvalidStatus
 	}
 
 	// Validate time range if both provided
@@ -209,6 +209,7 @@ func (a *AttendanceRecord) Override(
 	a.isOverride = true
 
 	// Compute work duration if both times provided
+	a.workDurationMins = nil
 	if checkInAt != nil && checkOutAt != nil {
 		duration := checkOutAt.Sub(*checkInAt)
 		durationMins := int(duration.Minutes())

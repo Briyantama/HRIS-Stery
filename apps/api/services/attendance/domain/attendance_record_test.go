@@ -252,8 +252,8 @@ func TestOverrideWithInvalidStatus(t *testing.T) {
 	record, _ := NewAttendanceRecord(tenantID, employeeID, date, "user-123")
 
 	err := record.Override(nil, nil, AttendanceStatus("INVALID"), "Invalid status")
-	if err != ErrInvalidDate {
-		t.Errorf("expected ErrInvalidDate for invalid status, got %v", err)
+	if err != ErrInvalidStatus {
+		t.Errorf("expected ErrInvalidStatus for invalid status, got %v", err)
 	}
 }
 

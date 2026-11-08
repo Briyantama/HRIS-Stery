@@ -225,8 +225,8 @@ func TestStatusCodes(t *testing.T) {
 		{"invalid time range", domain.ErrInvalidTimeRange, "POST", "/api/v1/attendance/override", "admin", override, 422, ""},
 		{"bad date", nil, "POST", "/api/v1/attendance/override", "admin", `{"date":"x"}`, 422, ""},
 		{"bad location", nil, "POST", "/api/v1/attendance/check-in", "employee", `{"latitude":123}`, 422, ""},
-		{"bad summary id", nil, "GET", "/api/v1/attendance/summary/not-a-uuid", "employee", "", 422, ""},
-		{"internal error hides detail", errors.New("pq: secret detail"), "GET", "/api/v1/attendance/summary/" + userID, "employee", "", 500, "internal error"},
+		{"bad summary id", nil, "GET", "/api/v1/attendance/summary/not-a-uuid", "manager", "", 422, ""},
+		{"internal error hides detail", errors.New("pq: secret detail"), "GET", "/api/v1/attendance/summary/" + userID, "manager", "", 500, "internal error"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

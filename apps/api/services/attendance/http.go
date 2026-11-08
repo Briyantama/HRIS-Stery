@@ -67,7 +67,7 @@ func (h *HTTPHandler) Register(mux *http.ServeMux) {
 	admins := authn.WithRole(roleHRAdmin)
 	mux.Handle("POST /api/v1/attendance/check-in", auth(http.HandlerFunc(h.handleCheckIn)))
 	mux.Handle("POST /api/v1/attendance/check-out", auth(http.HandlerFunc(h.handleCheckOut)))
-	mux.Handle("GET /api/v1/attendance/summary/{employee_id}", auth(http.HandlerFunc(h.handleSummary)))
+	mux.Handle("GET /api/v1/attendance/summary/{employee_id}", auth(managers(http.HandlerFunc(h.handleSummary)))) // tenant-wide counts
 	mux.Handle("GET /api/v1/attendance", auth(managers(http.HandlerFunc(h.handleList))))
 	mux.Handle("POST /api/v1/attendance/override", auth(admins(http.HandlerFunc(h.handleOverride))))
 }
