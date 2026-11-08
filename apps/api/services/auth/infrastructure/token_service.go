@@ -61,11 +61,7 @@ func (s *TokenServiceImpl) GenerateTokenPair(
 
 // ValidateAccessToken verifies an access token.
 func (s *TokenServiceImpl) ValidateAccessToken(ctx context.Context, token string) (*application.TokenClaims, error) {
-	claims, err := s.signer.ValidateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
-	return claims, nil
+	return s.signer.ValidateAccessToken(token)
 }
 
 // RefreshAccessToken rotates the refresh token and issues a new access token.
@@ -75,7 +71,7 @@ func (s *TokenServiceImpl) RefreshAccessToken(ctx context.Context, refreshToken 
 		return "", "", 0, fmt.Errorf("invalid refresh token: %w: %w", domain.ErrUnauthenticated, err)
 	}
 
-	isRevoked, err := s.IsRefreshTokenRevoked(ctx, claims.TokenHash)
+	isRevoked, err := s.isRefreshTokenRevoked(ctx, claims.TokenHash)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("check revocation: %w", err)
 	}
@@ -147,8 +143,8 @@ func (s *TokenServiceImpl) RevokeRefreshToken(ctx context.Context, refreshToken 
 	return nil
 }
 
-// IsRefreshTokenRevoked checks if a refresh token has been revoked.
-func (s *TokenServiceImpl) IsRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error) {
+// isRefreshTokenRevoked checks if a refresh token has been revoked.
+func (s *TokenServiceImpl) isRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error) {
 	key := revocationListKeyPrefix + tokenHash
 	exists := s.redis.Exists(ctx, key).Val()
 	return exists > 0, nil

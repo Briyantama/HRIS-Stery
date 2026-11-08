@@ -10,14 +10,13 @@ import (
 
 // ListAttendanceQuery retrieves attendance records for a tenant with filters.
 type ListAttendanceQuery struct {
-	TenantID     string
-	EmployeeID   *string
-	DepartmentID *string
-	DateFrom     *time.Time
-	DateTo       *time.Time
-	Status       *string
-	Offset       int
-	Limit        int
+	TenantID   string
+	EmployeeID *string
+	DateFrom   *time.Time
+	DateTo     *time.Time
+	Status     *string
+	Offset     int
+	Limit      int
 }
 
 // ListAttendanceHandler handles the list attendance query.
@@ -59,10 +58,6 @@ func (h *ListAttendanceHandler) Handle(ctx context.Context, query ListAttendance
 			return nil, fmt.Errorf("invalid employee id: %w", err)
 		}
 		filters.EmployeeID = &empID
-	}
-
-	if query.DepartmentID != nil {
-		filters.DepartmentID = query.DepartmentID
 	}
 
 	if query.DateFrom != nil {

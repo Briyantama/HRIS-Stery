@@ -64,14 +64,6 @@ func (m *mockAttendanceRepo) Update(ctx context.Context, attendance *domain.Atte
 	return nil
 }
 
-func (m *mockAttendanceRepo) ListByEmployee(ctx context.Context, tenantID domain.TenantID, employeeID domain.EmployeeID, from time.Time, to time.Time) ([]*domain.AttendanceRecord, error) {
-	return []*domain.AttendanceRecord{}, nil
-}
-
-func (m *mockAttendanceRepo) ListActiveCheckIns(ctx context.Context, tenantID domain.TenantID) ([]*domain.AttendanceRecord, error) {
-	return []*domain.AttendanceRecord{}, nil
-}
-
 type mockEventPublisher struct {
 	published []domain.DomainEvent
 }

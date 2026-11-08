@@ -117,7 +117,7 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 		return nil, fmt.Errorf("generate tokens: %w", err)
 	}
 
-	_ = h.eventPub.PublishAsync(ctx, domain.NewUserLoggedInEvent(
+	_ = h.eventPub.PublishSync(ctx, domain.NewUserLoggedInEvent(
 		tenant.ID(),
 		user.ID(),
 		user.Email(),
@@ -137,5 +137,5 @@ func (h *LoginHandler) Handle(ctx context.Context, cmd LoginCommand) (*LoginResu
 }
 
 func (h *LoginHandler) publishLoginFailed(ctx context.Context, email, tenantSlug, reason, ipAddr string) {
-	_ = h.eventPub.PublishAsync(ctx, domain.NewUserLoginFailedEvent(email, tenantSlug, reason, ipAddr))
+	_ = h.eventPub.PublishSync(ctx, domain.NewUserLoginFailedEvent(email, tenantSlug, reason, ipAddr))
 }

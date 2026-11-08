@@ -102,13 +102,8 @@ func RehydrateAuditEntry(
 	success bool,
 	errorMessage string,
 	changes map[string]string,
-	createdAtInterface interface{},
-) (*AuditEntry, error) {
-	createdAt, ok := createdAtInterface.(time.Time)
-	if !ok {
-		return nil, fmt.Errorf("invalid created_at type")
-	}
-
+	createdAt time.Time,
+) *AuditEntry {
 	return &AuditEntry{
 		id:           id,
 		tenantID:     tenantID,
@@ -121,7 +116,7 @@ func RehydrateAuditEntry(
 		errorMessage: errorMessage,
 		changes:      changes,
 		createdAt:    createdAt,
-	}, nil
+	}
 }
 
 // Invariants: No update or delete methods exist

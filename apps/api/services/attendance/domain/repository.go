@@ -26,23 +26,16 @@ type AttendanceRepository interface {
 
 	// Update persists changes to an attendance record.
 	Update(ctx context.Context, attendance *AttendanceRecord) error
-
-	// ListByEmployee retrieves all attendance records for a specific employee within date range.
-	ListByEmployee(ctx context.Context, tenantID TenantID, employeeID EmployeeID, from time.Time, to time.Time) ([]*AttendanceRecord, error)
-
-	// ListActiveCheckIns retrieves all currently checked-in records (no check-out) for a tenant.
-	ListActiveCheckIns(ctx context.Context, tenantID TenantID) ([]*AttendanceRecord, error)
 }
 
 // AttendanceFilters defines optional filters for querying attendance records.
 type AttendanceFilters struct {
-	EmployeeID   *EmployeeID
-	DepartmentID *string // not applied: department data lives in the employee service
-	DateFrom     *time.Time
-	DateTo       *time.Time
-	Status       *AttendanceStatus
-	Offset       int
-	Limit        int
+	EmployeeID *EmployeeID
+	DateFrom   *time.Time
+	DateTo     *time.Time
+	Status     *AttendanceStatus
+	Offset     int
+	Limit      int
 }
 
 // EventPublisher publishes domain events to the event stream.

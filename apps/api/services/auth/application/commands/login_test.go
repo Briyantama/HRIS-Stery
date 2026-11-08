@@ -123,18 +123,9 @@ func (m *MockTokenService) RevokeRefreshToken(ctx context.Context, refreshToken 
 	return fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) IsRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error) {
-	return false, nil
-}
-
 // MockEventPublisher for testing
 type MockEventPublisher struct {
 	events []domain.DomainEvent
-}
-
-func (m *MockEventPublisher) PublishAsync(ctx context.Context, event domain.DomainEvent) error {
-	m.events = append(m.events, event)
-	return nil
 }
 
 func (m *MockEventPublisher) PublishSync(ctx context.Context, event domain.DomainEvent) error {

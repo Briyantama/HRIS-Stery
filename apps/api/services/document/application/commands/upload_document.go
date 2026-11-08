@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Briyantama/HRIS-Stery/services/document/application"
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
+	"github.com/Briyantama/stery-kit/go/objstore"
 	"github.com/google/uuid"
 )
 
@@ -38,11 +38,11 @@ type UploadDocumentResult struct {
 // UploadDocumentHandler implements the upload use case
 type UploadDocumentHandler struct {
 	docRepo domain.DocumentRepository
-	store   application.ObjectStore
+	store   objstore.Store
 	bucket  string
 }
 
-func NewUploadDocumentHandler(docRepo domain.DocumentRepository, store application.ObjectStore, bucket string) *UploadDocumentHandler {
+func NewUploadDocumentHandler(docRepo domain.DocumentRepository, store objstore.Store, bucket string) *UploadDocumentHandler {
 	return &UploadDocumentHandler{docRepo: docRepo, store: store, bucket: bucket}
 }
 

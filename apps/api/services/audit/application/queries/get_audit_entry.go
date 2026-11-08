@@ -28,17 +28,5 @@ func (h *GetAuditEntryHandlerImpl) Handle(ctx context.Context, tenantID, entryID
 	if err != nil {
 		return nil, err
 	}
-	return &AuditEntryDTO{
-		ID:           e.ID().String(),
-		TenantID:     e.TenantID().String(),
-		ActorID:      e.ActorID(),
-		Action:       e.Action(),
-		ResourceType: e.ResourceType(),
-		ResourceID:   e.ResourceID(),
-		Description:  e.Description(),
-		Success:      e.Success(),
-		ErrorMessage: e.ErrorMessage(),
-		Changes:      e.Changes(),
-		CreatedAt:    e.CreatedAt(),
-	}, nil
+	return toDTO(e), nil
 }

@@ -121,8 +121,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 
 type noopPublisher struct{}
 
-func (n *noopPublisher) PublishAsync(context.Context, domain.DomainEvent) error { return nil }
-func (n *noopPublisher) PublishSync(context.Context, domain.DomainEvent) error  { return nil }
+func (n *noopPublisher) PublishSync(context.Context, domain.DomainEvent) error { return nil }
 
 func randomSuffix() string {
 	b := make([]byte, 4)

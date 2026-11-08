@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Briyantama/stery-kit/go/pgtenant"
 	"github.com/jackc/pgx/v5"
@@ -147,7 +148,7 @@ func scanEntry(row pgx.Row) (*domain.AuditEntry, error) {
 		entryID, tenantID, actorID, action, resourceType string
 		resourceID, description, errorMsg, changesJSON   *string
 		success                                          bool
-		createdAt                                        any
+		createdAt                                        time.Time
 	)
 	if err := row.Scan(&entryID, &tenantID, &actorID, &action, &resourceType,
 		&resourceID, &description, &success, &errorMsg, &changesJSON, &createdAt); err != nil {
@@ -172,7 +173,7 @@ func scanEntry(row pgx.Row) (*domain.AuditEntry, error) {
 		deref(errorMsg),
 		changes,
 		createdAt,
-	)
+	), nil
 }
 
 func deref(s *string) string {

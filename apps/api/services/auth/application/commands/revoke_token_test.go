@@ -28,10 +28,6 @@ func (m *revokeTokenMock) RevokeRefreshToken(context.Context, string) error {
 	return m.err
 }
 
-func (m *revokeTokenMock) IsRefreshTokenRevoked(context.Context, string) (bool, error) {
-	return false, nil
-}
-
 func TestRevokeTokenSuccess(t *testing.T) {
 	handler := NewRevokeTokenHandler(&revokeTokenMock{})
 	if err := handler.Handle(context.Background(), RevokeTokenCommand{RefreshToken: "refresh-1"}); err != nil {

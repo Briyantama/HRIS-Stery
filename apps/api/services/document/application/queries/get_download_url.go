@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Briyantama/HRIS-Stery/services/document/application"
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
+	"github.com/Briyantama/stery-kit/go/objstore"
 )
 
 const (
@@ -32,10 +32,10 @@ type DownloadURLResult struct {
 type GetDownloadURLHandler struct {
 	docRepo     domain.DocumentRepository
 	versionRepo domain.DocumentVersionRepository
-	store       application.ObjectStore
+	store       objstore.Store
 }
 
-func NewGetDownloadURLHandler(docRepo domain.DocumentRepository, versionRepo domain.DocumentVersionRepository, store application.ObjectStore) *GetDownloadURLHandler {
+func NewGetDownloadURLHandler(docRepo domain.DocumentRepository, versionRepo domain.DocumentVersionRepository, store objstore.Store) *GetDownloadURLHandler {
 	return &GetDownloadURLHandler{docRepo: docRepo, versionRepo: versionRepo, store: store}
 }
 

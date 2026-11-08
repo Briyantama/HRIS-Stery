@@ -142,24 +142,29 @@ func (s *JWTSigner) GenerateRefreshToken(
 	return signedToken, nil
 }
 
-// ValidateAccessToken verifies and parses an access token.
-func (s *JWTSigner) ValidateAccessToken(tokenString string) (*application.TokenClaims, error) {
-	claims := &CustomClaims{}
+// parse verifies the signature (RSA only) and fills claims. kind ("token" or "refresh token") only labels errors.
+func (s *JWTSigner) parse(tokenString string, claims jwt.Claims, kind string) error {
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.publicKey, nil
 	})
-
 	if err != nil {
-		return nil, fmt.Errorf("parse token: %w", err)
+		return fmt.Errorf("parse %s: %w", kind, err)
 	}
-
 	if !token.Valid {
-		return nil, fmt.Errorf("token is invalid")
+		return fmt.Errorf("%s is invalid", kind)
 	}
+	return nil
+}
 
+// ValidateAccessToken verifies and parses an access token.
+func (s *JWTSigner) ValidateAccessToken(tokenString string) (*application.TokenClaims, error) {
+	claims := &CustomClaims{}
+	if err := s.parse(tokenString, claims, "token"); err != nil {
+		return nil, err
+	}
 	return &application.TokenClaims{
 		UserID:    claims.UserID,
 		TenantID:  claims.TenantID,
@@ -172,24 +177,12 @@ func (s *JWTSigner) ValidateAccessToken(tokenString string) (*application.TokenC
 // ValidateRefreshToken verifies and parses a refresh token.
 func (s *JWTSigner) ValidateRefreshToken(tokenString string) (*RefreshClaims, error) {
 	claims := &RefreshClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return s.publicKey, nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("parse refresh token: %w", err)
-	}
-
-	if !token.Valid {
-		return nil, fmt.Errorf("refresh token is invalid")
+	if err := s.parse(tokenString, claims, "refresh token"); err != nil {
+		return nil, err
 	}
 	if claims.TokenUse != "refresh" {
 		return nil, fmt.Errorf("refresh token is invalid")
 	}
-
 	return claims, nil
 }
 

@@ -22,11 +22,6 @@ func NewEventPublisher(pub *events.Publisher) application.EventPublisher {
 	return &streamPublisher{pub: pub}
 }
 
-// PublishAsync is PublishSync: a stream append is one round trip, there is nothing to defer.
-func (p *streamPublisher) PublishAsync(ctx context.Context, event domain.DomainEvent) error {
-	return p.PublishSync(ctx, event)
-}
-
 // PublishSync appends the event to the stream.
 func (p *streamPublisher) PublishSync(ctx context.Context, event domain.DomainEvent) error {
 	payload, err := json.Marshal(eventPayload(event))

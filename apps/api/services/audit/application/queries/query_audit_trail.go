@@ -32,6 +32,22 @@ type AuditEntryDTO struct {
 	CreatedAt    time.Time
 }
 
+func toDTO(e *domain.AuditEntry) *AuditEntryDTO {
+	return &AuditEntryDTO{
+		ID:           e.ID().String(),
+		TenantID:     e.TenantID().String(),
+		ActorID:      e.ActorID(),
+		Action:       e.Action(),
+		ResourceType: e.ResourceType(),
+		ResourceID:   e.ResourceID(),
+		Description:  e.Description(),
+		Success:      e.Success(),
+		ErrorMessage: e.ErrorMessage(),
+		Changes:      e.Changes(),
+		CreatedAt:    e.CreatedAt(),
+	}
+}
+
 type QueryAuditTrailResult struct {
 	Entries    []AuditEntryDTO
 	TotalCount int
@@ -68,19 +84,7 @@ func (h *QueryAuditTrailHandlerImpl) Handle(ctx context.Context, filters AuditQu
 
 	dtos := make([]AuditEntryDTO, len(entries))
 	for i, e := range entries {
-		dtos[i] = AuditEntryDTO{
-			ID:           e.ID().String(),
-			TenantID:     e.TenantID().String(),
-			ActorID:      e.ActorID(),
-			Action:       e.Action(),
-			ResourceType: e.ResourceType(),
-			ResourceID:   e.ResourceID(),
-			Description:  e.Description(),
-			Success:      e.Success(),
-			ErrorMessage: e.ErrorMessage(),
-			Changes:      e.Changes(),
-			CreatedAt:    e.CreatedAt(),
-		}
+		dtos[i] = *toDTO(e)
 	}
 
 	return &QueryAuditTrailResult{Entries: dtos, TotalCount: total}, nil

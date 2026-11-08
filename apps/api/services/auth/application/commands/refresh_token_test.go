@@ -31,10 +31,6 @@ func (m *rotatingTokenMock) RevokeRefreshToken(context.Context, string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *rotatingTokenMock) IsRefreshTokenRevoked(context.Context, string) (bool, error) {
-	return false, nil
-}
-
 func TestRefreshTokenRotatesPair(t *testing.T) {
 	mock := &rotatingTokenMock{
 		access:  "access-2",
