@@ -46,8 +46,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket hris-documents
-        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket hris-documents
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket ${S3_BUCKET:?}
+        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket ${S3_BUCKET:?}
 
   # Containerized API for image checks: `docker compose --profile api up`. `make up` runs it with go run instead.
   api:

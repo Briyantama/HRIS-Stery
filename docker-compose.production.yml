@@ -64,8 +64,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket hris-documents
-        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket hris-documents
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket ${S3_BUCKET:?}
+        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket ${S3_BUCKET:?}
 
   # Schema migrations run as the owner/superuser; the api itself connects as the RLS-bound hris_app role.
   migrate:
@@ -99,6 +99,7 @@ services:
       DATABASE_URL: postgres://hris_app:${HRIS_APP_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
       REDIS_ADDR: dragonfly:6379
       S3_ENDPOINT: http://rustfs:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?}
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped

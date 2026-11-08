@@ -6,9 +6,9 @@ PID_FILE := $(RUN_DIR)/api.pid
 
 up:
 	$(COMPOSE) up -d
-	cd apps/api && go run ./cmd/migrate up
+	set -a; . ./.env; set +a; cd apps/api && DATABASE_URL="$$MIGRATE_DATABASE_URL" go run ./cmd/migrate up
 	mkdir -p $(RUN_DIR)
-	cd apps/api && (go run ./cmd/api > ../../$(RUN_DIR)/api.log 2>&1 & echo $$! > ../../$(PID_FILE))
+	set -a; . ./.env; set +a; cd apps/api && (go run ./cmd/api > ../../$(RUN_DIR)/api.log 2>&1 & echo $$! > ../../$(PID_FILE))
 	@echo "API started, pid $$(cat $(PID_FILE)), log $(RUN_DIR)/api.log"
 
 down:

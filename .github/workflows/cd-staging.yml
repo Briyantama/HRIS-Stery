@@ -62,13 +62,15 @@ jobs:
           echo "KUBECONFIG=kubeconfig" >> $GITHUB_ENV
       - name: Run database migrations
         run: |
+          kubectl delete pod migrate-${{ github.sha }} -n hris-staging --ignore-not-found
           kubectl run migrate-${{ github.sha }} \
             --image=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-api:${{ github.sha }} \
             --restart=Never \
             --namespace=hris-staging \
             --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
             --command -- /usr/local/bin/migrate up
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/migrate-${{ github.sha }} --timeout=120s -n hris-staging
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/migrate-${{ github.sha }} --timeout=120s -n hris-staging \
+            || { kubectl logs pod/migrate-${{ github.sha }} -n hris-staging; exit 1; }
       - name: Roll out api
         run: |
           kubectl set image deployment/hris-api api=${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/hris-api:${{ github.sha }} -n hris-staging
