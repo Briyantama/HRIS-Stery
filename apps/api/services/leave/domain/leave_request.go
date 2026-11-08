@@ -131,7 +131,10 @@ func (lr *LeaveRequest) Approve(approverId EmployeeID) error {
 		return ErrCannotDecideOwnRequest
 	}
 	if lr.status != StatusPending {
-		return ErrCannotApproveAlreadyRejected
+		if lr.status == StatusRejected {
+			return ErrCannotApproveAlreadyRejected
+		}
+		return ErrInvalidStatusTransition
 	}
 
 	lr.status = StatusApproved
@@ -150,7 +153,10 @@ func (lr *LeaveRequest) Reject(rejecterID EmployeeID, reason string) error {
 		return ErrCannotDecideOwnRequest
 	}
 	if lr.status != StatusPending {
-		return ErrCannotRejectAlreadyApproved
+		if lr.status == StatusApproved {
+			return ErrCannotRejectAlreadyApproved
+		}
+		return ErrInvalidStatusTransition
 	}
 
 	lr.status = StatusRejected

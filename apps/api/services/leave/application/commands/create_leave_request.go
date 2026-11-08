@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -89,7 +90,7 @@ func (h *CreateLeaveRequestHandler) Handle(ctx context.Context, cmd CreateLeaveR
 	// Validate leave balance sufficiency
 	year := cmd.StartDate.Year()
 	balance, err := h.leaveBalanceRepo.GetByEmployeeAndType(ctx, tenantID, employeeID, leaveTypeID, year)
-	if err != nil && err != domain.ErrNotFound {
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return nil, fmt.Errorf("checking balance: %w", err)
 	}
 

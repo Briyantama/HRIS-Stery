@@ -50,7 +50,7 @@ func (c *EmployeeCreated) Handle(ctx context.Context, env events.Envelope) error
 	}
 	tenantID, terr := domain.NewTenantID(payload.TenantID)
 	employeeID, eerr := domain.NewEmployeeID(payload.EmployeeID)
-	if terr != nil || eerr != nil {
+	if terr != nil || eerr != nil || payload.TenantID != env.TenantID {
 		slog.ErrorContext(ctx, "dropping employee created event with invalid ids", "event_id", env.EventID, "tenant_id", env.TenantID)
 		return nil
 	}

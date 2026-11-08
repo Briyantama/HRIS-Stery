@@ -65,8 +65,8 @@ func TestCannotApproveTwice(t *testing.T) {
 	_ = req.Approve(approverId)
 
 	err := req.Approve(approverId)
-	if err != ErrCannotApproveAlreadyRejected {
-		t.Errorf("expected ErrCannotApproveAlreadyRejected, got %v", err)
+	if err != ErrInvalidStatusTransition {
+		t.Errorf("expected ErrInvalidStatusTransition, got %v", err)
 	}
 }
 
