@@ -37,11 +37,10 @@ func (stubVerifier) Verify(_ context.Context, token string) (authn.Claims, error
 }
 
 type stub struct {
-	err      error
-	sentCmd  commands.SendNotificationCommand
-	markCmd  commands.MarkNotificationReadCommand
-	listQ    queries.ListNotificationsQuery
-	listJSON queries.NotificationDTO
+	err     error
+	sentCmd commands.SendNotificationCommand
+	markCmd commands.MarkNotificationReadCommand
+	listQ   queries.ListNotificationsQuery
 }
 
 func (s *stub) sendH() commands.SendNotificationHandler     { return sendStub{s} }

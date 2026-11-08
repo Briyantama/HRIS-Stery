@@ -18,6 +18,15 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+func mustRecord(t *testing.T, ctx context.Context, repo *AuditRepository, entries ...*domain.AuditEntry) {
+	t.Helper()
+	for _, e := range entries {
+		if err := repo.Record(ctx, e); err != nil {
+			t.Fatalf("record entry: %v", err)
+		}
+	}
+}
+
 func TestAuditRepository_Record(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
@@ -133,7 +142,7 @@ func TestAuditRepository_Query(t *testing.T) {
 			"",
 			nil,
 		)
-		repo.Record(ctx, entry)
+		mustRecord(t, ctx, repo, entry)
 	}
 
 	// Query all
@@ -169,8 +178,7 @@ func TestAuditRepository_Query_FilterByActor(t *testing.T) {
 	entry1, _ := domain.NewAuditEntry(tenantID, "actor-1", domain.ActionLogin, domain.ResourceUser, "", "Entry 1", true, "", nil)
 	entry2, _ := domain.NewAuditEntry(tenantID, "actor-2", domain.ActionLogin, domain.ResourceUser, "", "Entry 2", true, "", nil)
 
-	repo.Record(ctx, entry1)
-	repo.Record(ctx, entry2)
+	mustRecord(t, ctx, repo, entry1, entry2)
 
 	// Query with actor filter
 	filters := domain.QueryFilters{
@@ -222,7 +230,7 @@ func TestAuditRepository_Query_Pagination(t *testing.T) {
 			"",
 			nil,
 		)
-		repo.Record(ctx, entry)
+		mustRecord(t, ctx, repo, entry)
 	}
 
 	// First page
@@ -272,7 +280,7 @@ func TestAuditRepository_InsertOnly_NoDelete(t *testing.T) {
 		nil,
 	)
 
-	repo.Record(ctx, entry)
+	mustRecord(t, ctx, repo, entry)
 
 	// Retrieve it
 	retrieved, _ := repo.GetByID(ctx, tenantID, entry.ID())
@@ -312,7 +320,7 @@ func TestAuditRepository_JSON_Changes(t *testing.T) {
 		changes,
 	)
 
-	repo.Record(ctx, entry)
+	mustRecord(t, ctx, repo, entry)
 
 	// Retrieve and verify changes are preserved
 	retrieved, _ := repo.GetByID(ctx, tenantID, entry.ID())
@@ -340,8 +348,7 @@ func TestAuditRepository_TenantIsolation(t *testing.T) {
 	entry1, _ := domain.NewAuditEntry(tenant1, "actor", domain.ActionLogin, domain.ResourceUser, "", "Tenant 1", true, "", nil)
 	entry2, _ := domain.NewAuditEntry(tenant2, "actor", domain.ActionLogin, domain.ResourceUser, "", "Tenant 2", true, "", nil)
 
-	repo.Record(ctx, entry1)
-	repo.Record(ctx, entry2)
+	mustRecord(t, ctx, repo, entry1, entry2)
 
 	// Query tenant 1 should only see tenant 1 entries
 	filters := domain.QueryFilters{Limit: 100}
