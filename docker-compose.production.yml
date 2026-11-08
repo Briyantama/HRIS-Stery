@@ -1,215 +1,89 @@
-version: '3.9'
+# Production-like stack for HRIS-Stery. Every secret comes from the environment or .env; nothing is hardcoded.
+# Build from the stery-suite parent so the API image sees stery-kit/go.
+name: hris-prod
 
 services:
-  # ============================================================================
-  # Infrastructure Services
-  # ============================================================================
-
   postgres:
-    image: postgres:16-alpine
-    container_name: hris-postgres
+    image: postgres:18-alpine
     environment:
-      POSTGRES_USER: hris
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: hris
-      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=pg_stat_statements"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-    ports:
-      - "5432:5432"
+      - ./deploy/docker/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hris"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - hris-network
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: hris-redis
-    command: redis-server --appendonly yes
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    command: ["--requirepass=${REDIS_PASSWORD:?}"]
+    ulimits:
+      memlock: -1
     volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
+      - dragonfly_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - hris-network
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
-  nats:
-    image: nats:2.10-alpine
-    container_name: hris-nats
-    command: -js --bind=0.0.0.0
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?}
     volumes:
-      - nats_data:/data
-    ports:
-      - "4222:4222"
-      - "8222:8222"  # Admin panel
+      - rustfs_data:/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - hris-network
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
-  # ============================================================================
-  # HRIS Services
-  # ============================================================================
-
-  auth-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE: auth-service
-    container_name: hris-auth-service
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
     environment:
-      GRPC_PORT: 50051
-      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/auth
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
-      AUTH_PRIVATE_KEY: ${AUTH_PRIVATE_KEY:-}
-      AUTH_PUBLIC_KEY: ${AUTH_PUBLIC_KEY:-}
-    ports:
-      - "50051:50051"
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket hris-documents
+        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket hris-documents
+
+  api:
+    build:
+      context: ..
+      dockerfile: HRIS-Stery/apps/api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - hris-network
-    restart: unless-stopped
-
-  employee-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE: employee-service
-    container_name: hris-employee-service
+      dragonfly:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    env_file: .env
     environment:
-      GRPC_PORT: 50052
-      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/employee
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
+      PORT: "8000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      REDIS_ADDR: dragonfly:6379
+      S3_ENDPOINT: http://rustfs:9000
     ports:
-      - "50052:50052"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    networks:
-      - hris-network
+      - "127.0.0.1:8000:8000"
     restart: unless-stopped
-
-  attendance-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE: attendance-service
-    container_name: hris-attendance-service
-    environment:
-      GRPC_PORT: 50053
-      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/attendance
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
-      WORK_HOURS_PER_DAY: 8
-      LATE_THRESHOLD_MINUTES: 15
-    ports:
-      - "50053:50053"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    networks:
-      - hris-network
-    restart: unless-stopped
-
-  leave-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE: leave-service
-    container_name: hris-leave-service
-    environment:
-      GRPC_PORT: 50054
-      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/leave
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
-      DEFAULT_ANNUAL_LEAVE_DAYS: 20
-      DEFAULT_SICK_LEAVE_DAYS: 10
-    ports:
-      - "50054:50054"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    networks:
-      - hris-network
-    restart: unless-stopped
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-      args:
-        SERVICE: notification-service
-    container_name: hris-notification-service
-    environment:
-      GRPC_PORT: 50055
-      DATABASE_URL: postgres://hris:${POSTGRES_PASSWORD:-changeme}@postgres:5432/notification
-      NATS_URL: nats://nats:4222
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENDPOINT:-http://localhost:4317}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@hris.local}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-HRIS System}
-      SMTP_TLS_ENABLED: ${SMTP_TLS_ENABLED:-true}
-      EMAIL_TEMPLATES_DIR: ./templates
-    ports:
-      - "50055:50055"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    networks:
-      - hris-network
-    restart: unless-stopped
-
-networks:
-  hris-network:
-    driver: bridge
 
 volumes:
   postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  nats_data:
-    driver: local
+  dragonfly_data:
+  rustfs_data:
