@@ -50,7 +50,7 @@ func (r *TenantRepository) GetByID(ctx context.Context, id domain.TenantID) (*do
 	q := sqlcdb.New(r.pool)
 	row, err := q.GetTenantByID(ctx, uuid.MustParse(id.String()))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("tenant not found")
+		return nil, fmt.Errorf("tenant not found: %w", domain.ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query tenant: %w", err)

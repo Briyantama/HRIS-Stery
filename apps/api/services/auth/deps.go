@@ -43,7 +43,7 @@ func Build(d Deps) (*HTTPHandler, error) {
 
 	return NewHTTPHandler(
 		commands.NewLoginHandler(tenants, users, tokens, pub),
-		commands.NewRefreshTokenHandler(tokens),
+		commands.NewRefreshTokenHandler(tenants, users, tokens),
 		commands.NewRevokeTokenHandler(tokens),
 		commands.NewRegisterTenantHandler(tenants, users, roles, perms, tokens, pub),
 		queries.NewGetPermissionsHandler(users, roles, perms),

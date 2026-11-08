@@ -20,8 +20,8 @@ func (m *revokeTokenMock) ValidateAccessToken(context.Context, string) (*TokenCl
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *revokeTokenMock) RefreshAccessToken(context.Context, string) (string, string, int32, error) {
-	return "", "", 0, fmt.Errorf("not implemented")
+func (m *revokeTokenMock) ConsumeRefreshToken(context.Context, string) (*TokenClaims, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (m *revokeTokenMock) RevokeRefreshToken(context.Context, string) error {

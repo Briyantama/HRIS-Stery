@@ -21,8 +21,9 @@ type TokenService interface {
 	// ValidateAccessToken verifies and parses an access token, returning claims.
 	ValidateAccessToken(ctx context.Context, token string) (*TokenClaims, error)
 
-	// RefreshAccessToken exchanges a refresh token for rotated access + refresh tokens.
-	RefreshAccessToken(ctx context.Context, refreshToken string) (accessToken string, newRefreshToken string, ttl int32, err error)
+	// ConsumeRefreshToken verifies a refresh token and atomically spends it (single use).
+	// Replayed, revoked, expired or unknown tokens return domain.ErrUnauthenticated.
+	ConsumeRefreshToken(ctx context.Context, refreshToken string) (*TokenClaims, error)
 
 	// RevokeRefreshToken marks a refresh token as revoked.
 	RevokeRefreshToken(ctx context.Context, refreshToken string) error

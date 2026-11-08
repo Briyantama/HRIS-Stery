@@ -47,7 +47,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 
 	register := commands.NewRegisterTenantHandler(tenantRepo, userRepo, roleRepo, permissionRepo, tokenSvc, eventPub)
 	login := commands.NewLoginHandler(tenantRepo, userRepo, tokenSvc, eventPub)
-	refresh := commands.NewRefreshTokenHandler(tokenSvc)
+	refresh := commands.NewRefreshTokenHandler(tenantRepo, userRepo, tokenSvc)
 	revoke := commands.NewRevokeTokenHandler(tokenSvc)
 	validate := queries.NewValidateTokenHandler(tokenSvc)
 

@@ -64,64 +64,37 @@ func (s *TokenServiceImpl) ValidateAccessToken(ctx context.Context, token string
 	return s.signer.ValidateAccessToken(token)
 }
 
-// RefreshAccessToken rotates the refresh token and issues a new access token.
-func (s *TokenServiceImpl) RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, int32, error) {
+// ConsumeRefreshToken validates a refresh token and atomically spends it, so each token works once.
+// The caller issues the replacement pair (GenerateTokenPair) from freshly loaded state.
+func (s *TokenServiceImpl) ConsumeRefreshToken(ctx context.Context, refreshToken string) (*application.TokenClaims, error) {
 	claims, err := s.signer.ValidateRefreshToken(refreshToken)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("invalid refresh token: %w: %w", domain.ErrUnauthenticated, err)
+		return nil, fmt.Errorf("invalid refresh token: %w: %w", domain.ErrUnauthenticated, err)
 	}
 
 	isRevoked, err := s.isRefreshTokenRevoked(ctx, claims.TokenHash)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("check revocation: %w", err)
+		return nil, fmt.Errorf("check revocation: %w", err)
 	}
 	if isRevoked {
-		return "", "", 0, fmt.Errorf("refresh token is revoked: %w", domain.ErrUnauthenticated)
+		return nil, fmt.Errorf("refresh token is revoked: %w", domain.ErrUnauthenticated)
 	}
 
-	activeKey := refreshTokenKeyPrefix + claims.TokenHash
-	exists, err := s.redis.Exists(ctx, activeKey).Result()
+	// DEL is atomic: of concurrent callers, exactly one sees n == 1.
+	n, err := s.redis.Del(ctx, refreshTokenKeyPrefix+claims.TokenHash).Result()
 	if err != nil {
-		return "", "", 0, fmt.Errorf("check active refresh token: %w", err)
+		return nil, fmt.Errorf("consume refresh token: %w", err)
 	}
-	if exists == 0 {
-		return "", "", 0, fmt.Errorf("refresh token not found or expired: %w", domain.ErrUnauthenticated)
-	}
-
-	if err := s.redis.Del(ctx, activeKey).Err(); err != nil {
-		return "", "", 0, fmt.Errorf("remove active refresh token: %w", err)
-	}
-	if err := s.redis.Set(ctx, revocationListKeyPrefix+claims.TokenHash, "revoked", s.ttl).Err(); err != nil {
-		return "", "", 0, fmt.Errorf("revoke old refresh token: %w", err)
+	if n == 0 {
+		return nil, fmt.Errorf("refresh token not found, expired or already used: %w", domain.ErrUnauthenticated)
 	}
 
-	newTokenHash, err := s.storeRefreshToken(ctx)
-	if err != nil {
-		return "", "", 0, err
-	}
-
-	newRefreshToken, err := s.signer.GenerateRefreshToken(
-		claims.UserID,
-		claims.TenantID,
-		claims.Email,
-		claims.Roles,
-		newTokenHash,
-	)
-	if err != nil {
-		return "", "", 0, fmt.Errorf("generate rotated refresh token: %w", err)
-	}
-
-	accessToken, ttl, err := s.signer.GenerateAccessToken(
-		claims.UserID,
-		claims.TenantID,
-		claims.Email,
-		claims.Roles,
-	)
-	if err != nil {
-		return "", "", 0, fmt.Errorf("generate new access token: %w", err)
-	}
-
-	return accessToken, newRefreshToken, ttl, nil
+	return &application.TokenClaims{
+		UserID:   claims.UserID,
+		TenantID: claims.TenantID,
+		Email:    claims.Email,
+		Roles:    claims.Roles,
+	}, nil
 }
 
 // RevokeRefreshToken marks a refresh token as revoked.
@@ -146,7 +119,10 @@ func (s *TokenServiceImpl) RevokeRefreshToken(ctx context.Context, refreshToken 
 // isRefreshTokenRevoked checks if a refresh token has been revoked.
 func (s *TokenServiceImpl) isRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error) {
 	key := revocationListKeyPrefix + tokenHash
-	exists := s.redis.Exists(ctx, key).Val()
+	exists, err := s.redis.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
 	return exists > 0, nil
 }
 

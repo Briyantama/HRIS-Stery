@@ -27,7 +27,7 @@ func (m *MockTenantRepository) GetByID(ctx context.Context, id domain.TenantID) 
 	if t, ok := m.tenants[id.String()]; ok {
 		return t, nil
 	}
-	return nil, fmt.Errorf("tenant not found")
+	return nil, fmt.Errorf("tenant not found: %w", domain.ErrNotFound)
 }
 
 func (m *MockTenantRepository) GetBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
@@ -73,7 +73,7 @@ func (m *MockUserRepository) GetByID(ctx context.Context, tenantID domain.Tenant
 			return u, nil
 		}
 	}
-	return nil, fmt.Errorf("user not found")
+	return nil, fmt.Errorf("user not found: %w", domain.ErrNotFound)
 }
 
 func (m *MockUserRepository) GetByTenantAndEmail(ctx context.Context, tenantID domain.TenantID, email string) (*domain.User, error) {
@@ -115,8 +115,8 @@ func (m *MockTokenService) ValidateAccessToken(ctx context.Context, token string
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, int32, error) {
-	return "new-access-token", "new-refresh-token", 900, nil
+func (m *MockTokenService) ConsumeRefreshToken(ctx context.Context, refreshToken string) (*TokenClaims, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (m *MockTokenService) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
