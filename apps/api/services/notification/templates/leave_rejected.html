@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f8d7da; padding: 20px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #f5c6cb; }
+        .content { padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .footer { margin-top: 20px; font-size: 12px; color: #666; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Leave Request Rejected</h1>
+        </div>
+        <div class="content">
+            <p>Hi {{.RecipientName}},</p>
+            <p>Unfortunately, your leave request has been <strong>rejected</strong>.</p>
+
+            <h3>Leave Details:</h3>
+            <ul>
+                <li><strong>Leave Type:</strong> {{.LeaveType}}</li>
+                <li><strong>Requested Dates:</strong> {{.StartDate}} to {{.EndDate}}</li>
+                <li><strong>Duration:</strong> {{.Duration}} days</li>
+                <li><strong>Rejected By:</strong> {{.ManagerName}}</li>
+                <li><strong>Reason:</strong> {{.RejectionReason}}</li>
+            </ul>
+
+            <p>Please contact your manager to discuss alternative dates or reasons for the rejection.</p>
+
+            <a href="{{.DashboardLink}}" class="button">View Details</a>
+        </div>
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; 2026 HRIS System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
