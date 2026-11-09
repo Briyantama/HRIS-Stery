@@ -50,6 +50,8 @@ fi
 if has web; then
   echo "==> Web: check"
   (cd apps/web && npm run check)
+  echo "==> Web: lint"
+  (cd apps/web && npm run lint)
   if grep -q '"test:unit"' apps/web/package.json; then
     echo "==> Web: test:unit"
     (cd apps/web && npm run test:unit)
