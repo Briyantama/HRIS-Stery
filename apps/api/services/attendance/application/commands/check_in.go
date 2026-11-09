@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/attendance/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CheckInCommand represents the command to check an employee in.
@@ -97,7 +97,7 @@ func (h *CheckInHandler) Handle(ctx context.Context, cmd CheckInCommand) (*Check
 	}
 
 	// Publish check-in event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewAttendanceCheckedInEvent(
 		eventID,
 		tenantID,

@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // EmployeeID is a typed UUID wrapper to prevent accidental string comparisons.
@@ -19,7 +19,7 @@ func NewEmployeeID(id string) (EmployeeID, error) {
 
 // GenerateEmployeeID creates a new random EmployeeID.
 func GenerateEmployeeID() EmployeeID {
-	return EmployeeID(uuid.New().String())
+	return EmployeeID(uuid.NewV7().String())
 }
 
 // MustNewEmployeeID creates a new EmployeeID, panicking if invalid.

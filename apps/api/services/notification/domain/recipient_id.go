@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type RecipientID struct {
@@ -19,7 +19,7 @@ func NewRecipientID(id string) (RecipientID, error) {
 }
 
 func GenerateRecipientID() RecipientID {
-	return RecipientID{value: uuid.New()}
+	return RecipientID{value: uuid.NewV7()}
 }
 
 func (id RecipientID) String() string {
@@ -27,7 +27,7 @@ func (id RecipientID) String() string {
 }
 
 func (id RecipientID) IsZero() bool {
-	return id.value == uuid.Nil
+	return id.value == uuid.Nil()
 }
 
 func (id RecipientID) Equals(other RecipientID) bool {

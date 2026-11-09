@@ -81,18 +81,16 @@ func (s *JWTSigner) GenerateAccessToken(
 	expiresAt := now.Add(s.accessTTL)
 
 	claims := CustomClaims{
-		UserID:   userID,
-		TenantID: tenantID,
-		TID:      tenantID.String(),
-		Email:    email,
-		Roles:    roles,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.String(),
-			Issuer:    s.issuer,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			NotBefore: jwt.NewNumericDate(now),
-		},
+		UserID:    userID,
+		TenantID:  tenantID,
+		TID:       tenantID.String(),
+		Email:     email,
+		Roles:     roles,
+		Subject:   userID.String(),
+		Issuer:    s.issuer,
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
+		NotBefore: jwt.NewNumericDate(now),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -124,13 +122,11 @@ func (s *JWTSigner) GenerateRefreshToken(
 		Roles:     roles,
 		TokenHash: tokenHash,
 		TokenUse:  "refresh",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.String(),
-			Issuer:    s.issuer,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			NotBefore: jwt.NewNumericDate(now),
-		},
+		Subject:   userID.String(),
+		Issuer:    s.issuer,
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
+		NotBefore: jwt.NewNumericDate(now),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -144,7 +140,7 @@ func (s *JWTSigner) GenerateRefreshToken(
 
 // parse verifies the signature (RSA only) and fills claims. kind ("token" or "refresh token") only labels errors.
 func (s *JWTSigner) parse(tokenString string, claims jwt.Claims, kind string) error {
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

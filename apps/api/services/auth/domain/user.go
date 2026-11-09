@@ -230,7 +230,7 @@ func validatePassword(pwd string) error {
 			hasLower = true
 		case ch >= '0' && ch <= '9':
 			hasDigit = true
-		case ch < 128 && !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')):
+		case ch < 128 && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9'):
 			hasSymbol = true
 		}
 	}

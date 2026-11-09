@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // LeaveTypeID is a typed UUID wrapper for leave type identification.
@@ -30,7 +30,7 @@ func MustNewLeaveTypeID(id string) LeaveTypeID {
 
 // GenerateLeaveTypeID generates a new random LeaveTypeID.
 func GenerateLeaveTypeID() LeaveTypeID {
-	return LeaveTypeID(uuid.New().String())
+	return LeaveTypeID(uuid.NewV7().String())
 }
 
 // String returns the string representation of LeaveTypeID.

@@ -1,6 +1,6 @@
 package domain
 
-import "github.com/google/uuid"
+import "uuid"
 
 type TenantID struct {
 	value uuid.UUID
@@ -12,4 +12,4 @@ func MustNewTenantID(s string) TenantID {
 }
 
 func (t TenantID) String() string { return t.value.String() }
-func (t TenantID) IsZero() bool   { return t.value == uuid.Nil }
+func (t TenantID) IsZero() bool   { return t.value == uuid.Nil() }

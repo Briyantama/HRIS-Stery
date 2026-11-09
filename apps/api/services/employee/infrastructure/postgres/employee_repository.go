@@ -334,9 +334,9 @@ func (r *EmployeeRepository) CountByTenant(ctx context.Context, tenantID domain.
 }
 
 // employeeWhere builds the WHERE clause shared by list and count.
-func employeeWhere(tenantID domain.TenantID, filters domain.EmployeeFilters) (string, []interface{}) {
+func employeeWhere(tenantID domain.TenantID, filters domain.EmployeeFilters) (string, []any) {
 	where := " WHERE tenant_id = $1"
-	args := []interface{}{tenantID.String()}
+	args := []any{tenantID.String()}
 	if filters.Status != nil {
 		args = append(args, string(*filters.Status))
 		where += fmt.Sprintf(" AND status = $%d", len(args))

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 
 	"github.com/Briyantama/HRIS-Stery/internal/testdb"
 )
@@ -20,7 +20,7 @@ func TestEntries_RLSAndDefaultPartition(t *testing.T) {
 	}
 	defer pool.Close()
 
-	a, b := uuid.NewString(), uuid.NewString()
+	a, b := uuid.NewV7().String(), uuid.NewV7().String()
 	// Run as hris_app (NOBYPASSRLS), scoped to one tenant, like the service does.
 	asApp := func(tenantID string, fn func(tx pgx.Tx) error) error {
 		tx, err := pool.Begin(ctx)

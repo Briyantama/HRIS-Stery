@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/attendance/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // OverrideAttendanceCommand represents the command to override an attendance record.
@@ -101,7 +101,7 @@ func (h *OverrideAttendanceHandler) Handle(ctx context.Context, cmd OverrideAtte
 	}
 
 	// Publish override event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewAttendanceOverriddenEvent(
 		eventID,
 		tenantID,

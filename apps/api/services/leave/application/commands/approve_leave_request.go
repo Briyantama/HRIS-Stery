@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/HRIS-Stery/services/leave/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ApproveLeaveRequestCommand represents the command to approve a leave request.
@@ -81,7 +81,7 @@ func (h *ApproveLeaveRequestHandler) Handle(ctx context.Context, cmd ApproveLeav
 	}
 
 	// Publish domain event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewLeaveApprovedEvent(
 		eventID,
 		tenantID,

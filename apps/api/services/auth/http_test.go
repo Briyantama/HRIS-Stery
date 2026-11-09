@@ -74,7 +74,7 @@ func (s registerStub) Handle(context.Context, commands.RegisterTenantCommand) (*
 type permStub struct{ *stub }
 
 func (s permStub) Handle(_ context.Context, q queries.GetPermissionsQuery) ([]domain.Permission, error) {
-	s.stub.query = q
+	s.query = q
 	if s.err != nil {
 		return nil, s.err
 	}

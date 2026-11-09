@@ -130,7 +130,7 @@ func TestAuditRepository_Query(t *testing.T) {
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
 
 	// Record multiple entries
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		entry, _ := domain.NewAuditEntry(
 			tenantID,
 			"actor-123",
@@ -218,7 +218,7 @@ func TestAuditRepository_Query_Pagination(t *testing.T) {
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
 
 	// Clear and record 10 entries
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		entry, _ := domain.NewAuditEntry(
 			tenantID,
 			"actor",

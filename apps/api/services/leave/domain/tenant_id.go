@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // TenantID is a typed UUID wrapper for tenant identification.

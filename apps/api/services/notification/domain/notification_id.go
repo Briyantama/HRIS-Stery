@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type NotificationID struct {
@@ -19,7 +19,7 @@ func NewNotificationID(id string) (NotificationID, error) {
 }
 
 func GenerateNotificationID() NotificationID {
-	return NotificationID{value: uuid.New()}
+	return NotificationID{value: uuid.NewV7()}
 }
 
 func (id NotificationID) String() string {
@@ -27,7 +27,7 @@ func (id NotificationID) String() string {
 }
 
 func (id NotificationID) IsZero() bool {
-	return id.value == uuid.Nil
+	return id.value == uuid.Nil()
 }
 
 func (id NotificationID) Equals(other NotificationID) bool {

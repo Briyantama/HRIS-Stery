@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // UserID is a typed UUID for user identity.
@@ -36,7 +36,7 @@ func MustNewUserID(id string) UserID {
 
 // GenerateUserID creates a new random UserID.
 func GenerateUserID() UserID {
-	return UserID{value: uuid.New().String()}
+	return UserID{value: uuid.NewV7().String()}
 }
 
 // String returns the UUID string representation.

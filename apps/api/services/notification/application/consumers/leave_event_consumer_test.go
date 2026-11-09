@@ -7,9 +7,9 @@ import (
 
 	"github.com/Briyantama/HRIS-Stery/services/notification/application/commands"
 	"github.com/Briyantama/HRIS-Stery/services/notification/domain"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // MockSendNotificationHandler for testing
@@ -20,7 +20,7 @@ type MockSendNotificationHandler struct {
 func (m *MockSendNotificationHandler) Handle(ctx context.Context, cmd commands.SendNotificationCommand) (*commands.SendNotificationResult, error) {
 	m.handledCommands = append(m.handledCommands, cmd)
 	return &commands.SendNotificationResult{
-		NotificationIDs: []string{uuid.New().String()},
+		NotificationIDs: []string{uuid.NewV7().String()},
 	}, nil
 }
 
@@ -50,7 +50,7 @@ func TestLeaveEventConsumer_ConsumeLeaveRequested(t *testing.T) {
 		configs: make(map[string]*domain.NotificationChannelConfig),
 	}
 
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	emailConfig := &domain.EmailConfig{
 		SMTPHost:    "smtp.example.com",
 		SMTPPort:    587,
@@ -64,15 +64,15 @@ func TestLeaveEventConsumer_ConsumeLeaveRequested(t *testing.T) {
 
 	// Create event
 	event := &domain.LeaveRequestedEvent{
-		EventID:    uuid.New().String(),
+		EventID:    uuid.NewV7().String(),
 		TenantID:   tenantID,
-		ActorID:    uuid.New().String(),
+		ActorID:    uuid.NewV7().String(),
 		OccurredAt: time.Now(),
-		EmployeeID: uuid.New().String(),
+		EmployeeID: uuid.NewV7().String(),
 		LeaveType:  "Annual Leave",
 		StartDate:  "2026-06-15",
 		EndDate:    "2026-06-20",
-		ApproverId: uuid.New().String(),
+		ApproverId: uuid.NewV7().String(),
 	}
 
 	// Act
@@ -92,7 +92,7 @@ func TestLeaveEventConsumer_ConsumeLeaveApproved(t *testing.T) {
 		configs: make(map[string]*domain.NotificationChannelConfig),
 	}
 
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	emailConfig := &domain.EmailConfig{
 		SMTPHost:    "smtp.example.com",
 		SMTPPort:    587,
@@ -105,17 +105,17 @@ func TestLeaveEventConsumer_ConsumeLeaveApproved(t *testing.T) {
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 
 	// Create event
-	employeeID := uuid.New().String()
+	employeeID := uuid.NewV7().String()
 	event := &domain.LeaveApprovedEvent{
-		EventID:    uuid.New().String(),
+		EventID:    uuid.NewV7().String(),
 		TenantID:   tenantID,
-		ActorID:    uuid.New().String(),
+		ActorID:    uuid.NewV7().String(),
 		OccurredAt: time.Now(),
 		EmployeeID: employeeID,
 		LeaveType:  "Annual Leave",
 		StartDate:  "2026-06-15",
 		EndDate:    "2026-06-20",
-		ApproverId: uuid.New().String(),
+		ApproverId: uuid.NewV7().String(),
 	}
 
 	// Act
@@ -135,7 +135,7 @@ func TestLeaveEventConsumer_ConsumeLeaveRejected(t *testing.T) {
 		configs: make(map[string]*domain.NotificationChannelConfig),
 	}
 
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	emailConfig := &domain.EmailConfig{
 		SMTPHost:    "smtp.example.com",
 		SMTPPort:    587,
@@ -148,11 +148,11 @@ func TestLeaveEventConsumer_ConsumeLeaveRejected(t *testing.T) {
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 
 	// Create event
-	employeeID := uuid.New().String()
+	employeeID := uuid.NewV7().String()
 	event := &domain.LeaveRejectedEvent{
-		EventID:    uuid.New().String(),
+		EventID:    uuid.NewV7().String(),
 		TenantID:   tenantID,
-		ActorID:    uuid.New().String(),
+		ActorID:    uuid.NewV7().String(),
 		OccurredAt: time.Now(),
 		EmployeeID: employeeID,
 		LeaveType:  "Annual Leave",
@@ -180,17 +180,17 @@ func TestLeaveEventConsumer_NoConfigSkipsNotification(t *testing.T) {
 
 	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
 
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	event := &domain.LeaveRequestedEvent{
-		EventID:    uuid.New().String(),
+		EventID:    uuid.NewV7().String(),
 		TenantID:   tenantID,
-		ActorID:    uuid.New().String(),
+		ActorID:    uuid.NewV7().String(),
 		OccurredAt: time.Now(),
-		EmployeeID: uuid.New().String(),
+		EmployeeID: uuid.NewV7().String(),
 		LeaveType:  "Annual Leave",
 		StartDate:  "2026-06-15",
 		EndDate:    "2026-06-20",
-		ApproverId: uuid.New().String(),
+		ApproverId: uuid.NewV7().String(),
 	}
 
 	// Act

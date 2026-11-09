@@ -50,15 +50,9 @@ func (m *MockAuditRepositoryForQuery) Query(ctx context.Context, tenantID domain
 	if limit <= 0 {
 		limit = 100
 	}
-	offset := filters.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(filters.Offset, 0)
 
-	end := offset + limit
-	if end > len(results) {
-		end = len(results)
-	}
+	end := min(offset+limit, len(results))
 
 	if offset >= len(results) {
 		return []*domain.AuditEntry{}, len(results), nil
@@ -74,7 +68,7 @@ func TestQueryAuditTrailHandler_AllEntries(t *testing.T) {
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
 
 	// Add some entries
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		entry, _ := domain.NewAuditEntry(
 			tenantID,
 			"actor-123",
@@ -193,7 +187,7 @@ func TestQueryAuditTrailHandler_Pagination(t *testing.T) {
 	tenantID := domain.MustNewTenantID("550e8400-e29b-41d4-a716-446655440000")
 
 	// Add 10 entries
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		entry, _ := domain.NewAuditEntry(
 			tenantID,
 			"actor",

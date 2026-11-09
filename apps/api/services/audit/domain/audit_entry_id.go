@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type AuditEntryID struct {
@@ -11,7 +11,7 @@ type AuditEntryID struct {
 }
 
 func NewAuditEntryID() AuditEntryID {
-	return AuditEntryID{value: uuid.New()}
+	return AuditEntryID{value: uuid.NewV7()}
 }
 
 func NewAuditEntryIDFromString(s string) (AuditEntryID, error) {
@@ -27,7 +27,7 @@ func (id AuditEntryID) String() string {
 }
 
 func (id AuditEntryID) IsZero() bool {
-	return id.value == uuid.Nil
+	return id.value == uuid.Nil()
 }
 
 func MustNewAuditEntryID(s string) AuditEntryID {

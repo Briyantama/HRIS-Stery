@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // AttendanceID is a typed UUID wrapper for attendance record IDs.
@@ -30,7 +30,7 @@ func MustNewAttendanceID(id string) AttendanceID {
 
 // GenerateAttendanceID generates a new random AttendanceID.
 func GenerateAttendanceID() AttendanceID {
-	return AttendanceID(uuid.New().String())
+	return AttendanceID(uuid.NewV7().String())
 }
 
 // String returns the string representation of AttendanceID.

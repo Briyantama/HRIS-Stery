@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // PositionID is a typed UUID wrapper to prevent accidental string comparisons.
@@ -19,7 +19,7 @@ func NewPositionID(id string) (PositionID, error) {
 
 // GeneratePositionID creates a new random PositionID.
 func GeneratePositionID() PositionID {
-	return PositionID(uuid.New().String())
+	return PositionID(uuid.NewV7().String())
 }
 
 // MustNewPositionID creates a new PositionID, panicking if invalid.

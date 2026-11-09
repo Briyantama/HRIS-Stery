@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // RegisterTenantCommand creates a new tenant with its first admin user.
@@ -70,7 +70,7 @@ func (h *RegisterTenantHandler) Handle(ctx context.Context, cmd RegisterTenantCo
 	}
 
 	// Validate the admin user before anything is persisted, so bad input leaves no orphan tenant.
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	userID := domain.GenerateUserID()
 	adminUser, err := domain.NewUser(userID, tenantID, cmd.AdminEmail, cmd.AdminPassword, cmd.AdminName)
 	if err != nil {
@@ -88,7 +88,7 @@ func (h *RegisterTenantHandler) Handle(ctx context.Context, cmd RegisterTenantCo
 	// Create roles
 	roles := make(map[string]*domain.Role)
 	for _, roleName := range domain.BuiltInRoles() {
-		roleID := domain.MustNewRoleID(uuid.New().String())
+		roleID := domain.MustNewRoleID(uuid.NewV7().String())
 		role := domain.NewRole(roleID, tenantID, roleName, "", true)
 		if err := h.roleRepo.Create(ctx, role); err != nil {
 			return nil, fmt.Errorf("create role %s: %w", roleName, err)

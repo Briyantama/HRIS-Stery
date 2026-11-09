@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // DomainEvent is the interface all domain events must implement.
@@ -23,7 +23,7 @@ type BaseDomainEvent struct {
 // NewBaseDomainEvent creates a base event with UUID v7 ID and current timestamp.
 func NewBaseDomainEvent(eventType string) BaseDomainEvent {
 	return BaseDomainEvent{
-		eventID:    uuid.New().String(), // In practice, use uuid v7 for time-ordering
+		eventID:    uuid.NewV7().String(),
 		eventType:  eventType,
 		occurredAt: time.Now().UTC(),
 	}

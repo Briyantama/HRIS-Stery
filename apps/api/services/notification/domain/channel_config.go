@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"time"
 )
 
@@ -75,12 +76,7 @@ func RehydrateNotificationChannelConfig(
 }
 
 func (ncc *NotificationChannelConfig) IsChannelEnabled(channel ChannelType) bool {
-	for _, ch := range ncc.enabledChannels {
-		if ch == channel {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ncc.enabledChannels, channel)
 }
 
 func (ncc *NotificationChannelConfig) GetEmailConfig() *EmailConfig {

@@ -4,14 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 func TestNewNotification_ValidCreation(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, err := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, err := NewRecipientID(uuid.NewV7().String())
 	require.NoError(t, err)
 
 	variables := map[string]string{
@@ -39,7 +39,7 @@ func TestNewNotification_ValidCreation(t *testing.T) {
 
 func TestNewNotification_InvalidTenantID(t *testing.T) {
 	zeroTenant := TenantID("")
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	_, err := NewNotification(
 		zeroTenant,
@@ -55,7 +55,7 @@ func TestNewNotification_InvalidTenantID(t *testing.T) {
 }
 
 func TestNewNotification_InvalidRecipientID(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
 	zeroRecipient := RecipientID{}
 
 	_, err := NewNotification(
@@ -72,8 +72,8 @@ func TestNewNotification_InvalidRecipientID(t *testing.T) {
 }
 
 func TestNewNotification_InvalidChannel(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	_, err := NewNotification(
 		tenantID,
@@ -89,8 +89,8 @@ func TestNewNotification_InvalidChannel(t *testing.T) {
 }
 
 func TestNotification_MarkSent(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	notif, _ := NewNotification(
 		tenantID,
@@ -104,7 +104,7 @@ func TestNotification_MarkSent(t *testing.T) {
 
 	assert.Equal(t, NotificationStatusPending, notif.Status())
 
-	deliveryID := uuid.New().String()
+	deliveryID := uuid.NewV7().String()
 	err := notif.MarkSent(deliveryID)
 	require.NoError(t, err)
 
@@ -114,8 +114,8 @@ func TestNotification_MarkSent(t *testing.T) {
 }
 
 func TestNotification_MarkFailed(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	notif, _ := NewNotification(
 		tenantID,
@@ -137,8 +137,8 @@ func TestNotification_MarkFailed(t *testing.T) {
 }
 
 func TestNotification_MarkSentThenRead(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	notif, _ := NewNotification(
 		tenantID,
@@ -161,8 +161,8 @@ func TestNotification_MarkSentThenRead(t *testing.T) {
 }
 
 func TestNotification_InvalidTransition_FailedToSent(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	notif, _ := NewNotification(
 		tenantID,
@@ -185,8 +185,8 @@ func TestNotification_InvalidTransition_FailedToSent(t *testing.T) {
 }
 
 func TestNotification_InvalidTransition_PendingToRead(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 
 	notif, _ := NewNotification(
 		tenantID,
@@ -206,8 +206,8 @@ func TestNotification_InvalidTransition_PendingToRead(t *testing.T) {
 
 func TestRehydrateNotification(t *testing.T) {
 	id := GenerateNotificationID()
-	tenantID := MustNewTenantID(uuid.New().String())
-	recipientID, _ := NewRecipientID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
+	recipientID, _ := NewRecipientID(uuid.NewV7().String())
 	now := time.Now().UTC()
 	sentAt := now.Add(time.Minute)
 
@@ -238,7 +238,7 @@ func TestRehydrateNotification(t *testing.T) {
 }
 
 func TestNewNotificationChannelConfig_Valid(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
 	emailConfig := &EmailConfig{
 		SMTPHost:    "smtp.example.com",
 		SMTPPort:    587,
@@ -259,7 +259,7 @@ func TestNewNotificationChannelConfig_Valid(t *testing.T) {
 }
 
 func TestNewNotificationChannelConfig_NoChannelsEnabled(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
 
 	_, err := NewNotificationChannelConfig(
 		tenantID,
@@ -271,7 +271,7 @@ func TestNewNotificationChannelConfig_NoChannelsEnabled(t *testing.T) {
 }
 
 func TestNewNotificationChannelConfig_EmailEnabledWithoutConfig(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
 
 	_, err := NewNotificationChannelConfig(
 		tenantID,
@@ -283,7 +283,7 @@ func TestNewNotificationChannelConfig_EmailEnabledWithoutConfig(t *testing.T) {
 }
 
 func TestNotificationChannelConfig_IsChannelEnabled(t *testing.T) {
-	tenantID := MustNewTenantID(uuid.New().String())
+	tenantID := MustNewTenantID(uuid.NewV7().String())
 	emailConfig := &EmailConfig{
 		SMTPHost:    "smtp.example.com",
 		SMTPPort:    587,

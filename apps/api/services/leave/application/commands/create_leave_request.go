@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/leave/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CreateLeaveRequestCommand represents the command to create a new leave request.
@@ -127,7 +127,7 @@ func (h *CreateLeaveRequestHandler) Handle(ctx context.Context, cmd CreateLeaveR
 	}
 
 	// Publish domain event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewLeaveRequestedEvent(
 		eventID,
 		tenantID,

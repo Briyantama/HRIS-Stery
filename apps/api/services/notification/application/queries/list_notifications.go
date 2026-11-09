@@ -54,10 +54,7 @@ func (h *ListNotificationsHandlerImpl) Handle(ctx context.Context, query ListNot
 		return nil, fmt.Errorf("list notifications: %w", err)
 	}
 
-	offset := query.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(query.Offset, 0)
 
 	filters := domain.ListFilters{
 		UnreadOnly: query.UnreadOnly,

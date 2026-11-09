@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/HRIS-Stery/services/leave/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // RejectLeaveRequestCommand represents the command to reject a leave request.
@@ -80,7 +80,7 @@ func (h *RejectLeaveRequestHandler) Handle(ctx context.Context, cmd RejectLeaveR
 	}
 
 	// Publish domain event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewLeaveRejectedEvent(
 		eventID,
 		tenantID,

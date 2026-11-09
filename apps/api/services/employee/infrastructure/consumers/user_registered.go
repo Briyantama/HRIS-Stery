@@ -10,8 +10,8 @@ import (
 	"github.com/Briyantama/HRIS-Stery/services/employee/application/commands"
 	"github.com/Briyantama/HRIS-Stery/services/employee/domain"
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // UserRegisteredType is the event type that creates an employee shell record.

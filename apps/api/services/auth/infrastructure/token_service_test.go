@@ -68,15 +68,13 @@ func TestConsumeRefreshTokenConcurrentReplayWinsOnce(t *testing.T) {
 	var mu sync.Mutex
 	wins := 0
 	for range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if _, err := s.ConsumeRefreshToken(context.Background(), refresh); err == nil {
 				mu.Lock()
 				wins++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if wins != 1 {

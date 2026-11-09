@@ -128,16 +128,14 @@ func TestConcurrentCreatesDoNotLoseBalanceUpdates(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, n)
 	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			d := time.Date(2026, 5, 1+i, 0, 0, 0, 0, time.UTC)
 			r, err := domain.NewLeaveRequest(tenant, emp, leaveType, d, d, 1, "trip", emp.String())
 			if err == nil {
 				err = requests.CreateAndUpdateBalanceAtomically(ctx, r, domain.BalanceDelta{Pending: 1})
 			}
 			errs <- err
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)

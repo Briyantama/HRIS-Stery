@@ -108,10 +108,10 @@ func (r *LeaveRequestRepository) GetByID(ctx context.Context, tenantID domain.Te
 }
 
 // leaveFilterSQL renders the optional filters as " AND ..." clauses with their positional args.
-func leaveFilterSQL(filters domain.LeaveFilters) (string, []interface{}) {
+func leaveFilterSQL(filters domain.LeaveFilters) (string, []any) {
 	var sb strings.Builder
-	args := []interface{}{}
-	add := func(clause string, v interface{}) {
+	args := []any{}
+	add := func(clause string, v any) {
 		args = append(args, v)
 		fmt.Fprintf(&sb, " AND "+clause, len(args))
 	}

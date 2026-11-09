@@ -52,7 +52,7 @@ type queryStub struct{ *stub }
 type getStub struct{ *stub }
 
 func (s recordStub) Handle(_ context.Context, c commands.RecordAuditCommand) (*commands.RecordAuditResult, error) {
-	s.recorded, s.stub.gotRecord = true, c
+	s.recorded, s.gotRecord = true, c
 	return &commands.RecordAuditResult{EntryID: entryID}, s.err
 }
 func (s queryStub) Handle(_ context.Context, f queries.AuditQueryFilters) (*queries.QueryAuditTrailResult, error) {

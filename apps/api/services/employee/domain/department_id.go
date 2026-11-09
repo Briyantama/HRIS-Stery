@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // DepartmentID is a typed UUID wrapper to prevent accidental string comparisons.
@@ -19,7 +19,7 @@ func NewDepartmentID(id string) (DepartmentID, error) {
 
 // GenerateDepartmentID creates a new random DepartmentID.
 func GenerateDepartmentID() DepartmentID {
-	return DepartmentID(uuid.New().String())
+	return DepartmentID(uuid.NewV7().String())
 }
 
 // MustNewDepartmentID creates a new DepartmentID, panicking if invalid.

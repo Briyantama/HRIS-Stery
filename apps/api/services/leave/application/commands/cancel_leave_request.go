@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Briyantama/HRIS-Stery/services/leave/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CancelLeaveRequestCommand represents the command to cancel a leave request.
@@ -82,7 +82,7 @@ func (h *CancelLeaveRequestHandler) Handle(ctx context.Context, cmd CancelLeaveR
 	}
 
 	// Publish domain event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	event := domain.NewLeaveCancelledEvent(
 		eventID,
 		tenantID,

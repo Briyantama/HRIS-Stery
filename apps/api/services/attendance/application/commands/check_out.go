@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/attendance/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // CheckOutCommand represents the command to check an employee out.
@@ -86,7 +86,7 @@ func (h *CheckOutHandler) Handle(ctx context.Context, cmd CheckOutCommand) (*Che
 	}
 
 	// Publish check-out event
-	eventID := uuid.New().String()
+	eventID := uuid.NewV7().String()
 	workDurationMins := 0
 	if attendance.WorkDurationMins() != nil {
 		workDurationMins = *attendance.WorkDurationMins()

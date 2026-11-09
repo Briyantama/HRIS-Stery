@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // TenantID is a typed UUID wrapper to prevent accidental string comparisons.

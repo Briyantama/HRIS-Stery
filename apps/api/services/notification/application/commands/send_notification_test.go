@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/Briyantama/HRIS-Stery/services/notification/domain"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 // MockNotificationRepository implements domain.NotificationRepository for testing
@@ -40,8 +40,8 @@ func TestSendNotificationHandler_ValidCommand(t *testing.T) {
 	mockRepo := &MockNotificationRepository{}
 	handler := NewSendNotificationHandler(mockRepo)
 
-	tenantID := uuid.New().String()
-	recipientID := uuid.New().String()
+	tenantID := uuid.NewV7().String()
+	recipientID := uuid.NewV7().String()
 
 	cmd := SendNotificationCommand{
 		TenantID:    tenantID,
@@ -68,7 +68,7 @@ func TestSendNotificationHandler_InvalidRecipientID(t *testing.T) {
 	handler := NewSendNotificationHandler(mockRepo)
 
 	cmd := SendNotificationCommand{
-		TenantID:    uuid.New().String(),
+		TenantID:    uuid.NewV7().String(),
 		RecipientID: "invalid-uuid",
 		TemplateKey: "leave.requested",
 		Channels:    []domain.ChannelType{domain.ChannelTypeEmail},
@@ -84,8 +84,8 @@ func TestSendNotificationHandler_NoChannels(t *testing.T) {
 	handler := NewSendNotificationHandler(mockRepo)
 
 	cmd := SendNotificationCommand{
-		TenantID:    uuid.New().String(),
-		RecipientID: uuid.New().String(),
+		TenantID:    uuid.NewV7().String(),
+		RecipientID: uuid.NewV7().String(),
 		TemplateKey: "leave.requested",
 		Channels:    []domain.ChannelType{},
 	}

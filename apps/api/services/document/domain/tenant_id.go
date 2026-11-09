@@ -1,6 +1,6 @@
 package domain
 
-import "github.com/google/uuid"
+import "uuid"
 
 type TenantID struct {
 	value uuid.UUID
@@ -9,11 +9,11 @@ type TenantID struct {
 // NewTenantID parses a tenant UUID; the nil UUID is rejected.
 func NewTenantID(s string) (TenantID, error) {
 	id, err := uuid.Parse(s)
-	if err != nil || id == uuid.Nil {
+	if err != nil || id == uuid.Nil() {
 		return TenantID{}, ErrInvalidTenantID
 	}
 	return TenantID{value: id}, nil
 }
 
 func (t TenantID) String() string { return t.value.String() }
-func (t TenantID) IsZero() bool   { return t.value == uuid.Nil }
+func (t TenantID) IsZero() bool   { return t.value == uuid.Nil() }

@@ -7,10 +7,10 @@ import (
 
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
 	sqlcdb "github.com/Briyantama/HRIS-Stery/services/auth/infrastructure/postgres/sqlc"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // TenantRepository implements domain.TenantRepository using PostgreSQL.

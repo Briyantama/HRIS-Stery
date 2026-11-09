@@ -68,7 +68,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 	if err != nil {
 		return err
 	}
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	store, err := objstore.NewS3(objstore.S3Config{
 		Endpoint:        cfg.S3.Endpoint,
@@ -97,13 +97,11 @@ func run(ctx context.Context, getenv func(string) string) error {
 	ctx, cancel := context.WithCancel(ctx) // stops the consumers when the server fails too
 	defer cancel()
 	for group, hs := range consumers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := events.RunConsumer(ctx, rdb, eventStream, group, consumerName, hs); err != nil {
 				slog.Error("event consumer stopped", "group", group, "error", err)
 			}
-		}()
+		})
 	}
 
 	mux := newMux(handlers...)

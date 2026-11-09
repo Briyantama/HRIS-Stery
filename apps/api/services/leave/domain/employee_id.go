@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // EmployeeID is a typed UUID wrapper for employee identification.
@@ -30,7 +30,7 @@ func MustNewEmployeeID(id string) EmployeeID {
 
 // GenerateEmployeeID generates a new random EmployeeID.
 func GenerateEmployeeID() EmployeeID {
-	return EmployeeID(uuid.New().String())
+	return EmployeeID(uuid.NewV7().String())
 }
 
 // String returns the string representation of EmployeeID.

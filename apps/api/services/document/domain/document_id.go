@@ -3,7 +3,7 @@ package domain
 import (
 	"fmt"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type DocumentID struct {
@@ -11,7 +11,7 @@ type DocumentID struct {
 }
 
 func NewDocumentID() DocumentID {
-	return DocumentID{value: uuid.New()}
+	return DocumentID{value: uuid.NewV7()}
 }
 
 func NewDocumentIDFromString(s string) (DocumentID, error) {
@@ -27,7 +27,7 @@ func (id DocumentID) String() string {
 }
 
 func (id DocumentID) IsZero() bool {
-	return id.value == uuid.Nil
+	return id.value == uuid.Nil()
 }
 
 func MustNewDocumentID(s string) DocumentID {

@@ -101,8 +101,8 @@ func (h *HTTPHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteSuccess(w, http.StatusOK, loginResponse{
-		tokenPairResponse: tokenPairResponse{AccessToken: res.AccessToken, RefreshToken: res.RefreshToken, ExpiresIn: res.AccessTokenTTL},
-		Claims:            claimsResponse{UserID: res.UserID.String(), TenantID: res.TenantID.String(), Email: res.Email, Roles: res.Roles},
+		AccessToken: res.AccessToken, RefreshToken: res.RefreshToken, ExpiresIn: res.AccessTokenTTL,
+		Claims: claimsResponse{UserID: res.UserID.String(), TenantID: res.TenantID.String(), Email: res.Email, Roles: res.Roles},
 	})
 }
 

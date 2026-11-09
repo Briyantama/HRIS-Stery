@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // ListDocumentsQuery captures list request

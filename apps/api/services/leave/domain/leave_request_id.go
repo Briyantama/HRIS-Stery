@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // LeaveRequestID is a typed UUID wrapper for leave request identification.
@@ -30,7 +30,7 @@ func MustNewLeaveRequestID(id string) LeaveRequestID {
 
 // GenerateLeaveRequestID generates a new random LeaveRequestID.
 func GenerateLeaveRequestID() LeaveRequestID {
-	return LeaveRequestID(uuid.New().String())
+	return LeaveRequestID(uuid.NewV7().String())
 }
 
 // String returns the string representation of LeaveRequestID.

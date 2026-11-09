@@ -10,7 +10,7 @@ import (
 
 	"github.com/Briyantama/stery-kit/go/authn"
 	"github.com/Briyantama/stery-kit/go/httpx"
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/Briyantama/HRIS-Stery/services/audit/application/commands"
 	"github.com/Briyantama/HRIS-Stery/services/audit/application/queries"

@@ -8,9 +8,9 @@ import (
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
 	sqlcdb "github.com/Briyantama/HRIS-Stery/services/auth/infrastructure/postgres/sqlc"
 	"github.com/Briyantama/stery-kit/go/pgtenant"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 )
 
 // UserRepository implements domain.UserRepository using PostgreSQL with RLS.

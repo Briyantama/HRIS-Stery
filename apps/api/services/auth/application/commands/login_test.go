@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // MockTenantRepository for testing
@@ -138,7 +138,7 @@ func TestLoginSuccess(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	tenantSlug := domain.MustNewTenantSlug("acme-corp")
 	tenant := domain.NewTenant(tenantID, tenantSlug, "ACME Corp")
 
@@ -221,7 +221,7 @@ func TestLoginFailInvalidTenant(t *testing.T) {
 func TestLoginFailInvalidPassword(t *testing.T) {
 	ctx := context.Background()
 
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	tenantSlug := domain.MustNewTenantSlug("acme-corp")
 	tenant := domain.NewTenant(tenantID, tenantSlug, "ACME Corp")
 

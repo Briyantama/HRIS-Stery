@@ -7,7 +7,7 @@ import (
 
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
 	"github.com/Briyantama/stery-kit/go/objstore"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // UploadURLTTL is how long the presigned upload URL stays valid.

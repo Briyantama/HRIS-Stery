@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 )
 
 // LeaveBalanceID is a typed UUID wrapper for leave balance identification.
@@ -30,7 +30,7 @@ func MustNewLeaveBalanceID(id string) LeaveBalanceID {
 
 // GenerateLeaveBalanceID generates a new random LeaveBalanceID.
 func GenerateLeaveBalanceID() LeaveBalanceID {
-	return LeaveBalanceID(uuid.New().String())
+	return LeaveBalanceID(uuid.NewV7().String())
 }
 
 // String returns the string representation of LeaveBalanceID.

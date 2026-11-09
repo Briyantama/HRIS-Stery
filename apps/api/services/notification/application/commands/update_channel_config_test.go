@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/Briyantama/HRIS-Stery/services/notification/domain"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"uuid"
 )
 
 type fakeConfigRepo struct {
@@ -29,7 +29,7 @@ func (f *fakeConfigRepo) Update(_ context.Context, c *domain.NotificationChannel
 func TestUpdateChannelConfig_KeepsOtherChannelsAndEmailConfig(t *testing.T) {
 	repo := &fakeConfigRepo{}
 	h := NewUpdateChannelConfigHandler(repo)
-	tenant := uuid.NewString()
+	tenant := uuid.NewV7().String()
 	email := &domain.EmailConfig{SMTPHost: "smtp.example.com", SMTPPort: 587, FromAddress: "noreply@example.com"}
 
 	_, err := h.Handle(context.Background(), UpdateChannelConfigCommand{
@@ -51,7 +51,7 @@ func TestUpdateChannelConfig_KeepsOtherChannelsAndEmailConfig(t *testing.T) {
 func TestUpdateChannelConfig_EmailReplacesOnlyEmailConfig(t *testing.T) {
 	repo := &fakeConfigRepo{}
 	h := NewUpdateChannelConfigHandler(repo)
-	tenant := uuid.NewString()
+	tenant := uuid.NewV7().String()
 	old := &domain.EmailConfig{SMTPHost: "old.example.com", SMTPPort: 587, FromAddress: "a@example.com"}
 	next := &domain.EmailConfig{SMTPHost: "new.example.com", SMTPPort: 465, FromAddress: "b@example.com"}
 

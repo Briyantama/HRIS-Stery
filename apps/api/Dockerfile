@@ -1,6 +1,6 @@
 # Build context is the PARENT of the repo, so the stery-kit replace resolves:
 #   docker build -f HRIS-Stery/apps/api/Dockerfile -t hris-api .   (run from stery-suite/, or CI's checkout root)
-FROM golang:1.25-alpine AS build
+FROM golang:1.27.3-alpine AS build
 WORKDIR /src/HRIS-Stery/apps/api
 COPY stery-kit/go /src/stery-kit/go
 COPY HRIS-Stery/apps/api/ ./

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Briyantama/stery-kit/go/events"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"uuid"
 
 	"github.com/Briyantama/HRIS-Stery/internal/testdb"
 	"github.com/Briyantama/HRIS-Stery/services/audit"
@@ -29,7 +29,7 @@ func TestConsumers_RecordOnceAndRetryOnFailure(t *testing.T) {
 		t.Fatalf("no handler for %s", typ)
 	}
 	env := events.Envelope{
-		EventID: uuid.NewString(), EventType: typ, SchemaVersion: 1,
+		EventID: uuid.NewV7().String(), EventType: typ, SchemaVersion: 1,
 		TenantID: tenant, ActorID: "u-1", OccurredAt: time.Now(), Payload: json.RawMessage(`{}`),
 	}
 
@@ -45,7 +45,7 @@ func TestConsumers_RecordOnceAndRetryOnFailure(t *testing.T) {
 	}
 
 	// Missing actor: recorded as "system" so the event is not retried forever.
-	env.EventID, env.ActorID = uuid.NewString(), ""
+	env.EventID, env.ActorID = uuid.NewV7().String(), ""
 	if err := h(ctx, env); err != nil {
 		t.Fatalf("event without actor_id: %v", err)
 	}

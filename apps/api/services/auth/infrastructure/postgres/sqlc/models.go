@@ -7,7 +7,7 @@ package sqlc
 import (
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type AuthLoginAttempt struct {

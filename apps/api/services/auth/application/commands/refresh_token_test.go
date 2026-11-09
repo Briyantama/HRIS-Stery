@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Briyantama/HRIS-Stery/services/auth/domain"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type rotatingTokenMock struct {
@@ -55,7 +55,7 @@ type refreshFixture struct {
 func newRefreshFixture(t *testing.T) *refreshFixture {
 	t.Helper()
 	ctx := context.Background()
-	tenantID := domain.MustNewTenantID(uuid.New().String())
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
 	tenant := domain.NewTenant(tenantID, domain.MustNewTenantSlug("acme-corp"), "ACME")
 	user, err := domain.NewUser(domain.GenerateUserID(), tenantID, "john@example.com", "ValidPass123!", "John")
 	if err != nil {
@@ -67,7 +67,7 @@ func newRefreshFixture(t *testing.T) *refreshFixture {
 	_ = users.Create(ctx, user)
 
 	tokens := &rotatingTokenMock{claims: &TokenClaims{UserID: user.ID(), TenantID: tenantID, Email: user.Email(), Roles: []string{"hr_admin"}}}
-	repo := currentRolesRepo{users, []*domain.Role{domain.NewRole(domain.MustNewRoleID(uuid.New().String()), tenantID, "employee", "", true)}}
+	repo := currentRolesRepo{users, []*domain.Role{domain.NewRole(domain.MustNewRoleID(uuid.NewV7().String()), tenantID, "employee", "", true)}}
 	return &refreshFixture{tenant, user, tokens, NewRefreshTokenHandler(tenants, repo, tokens)}
 }
 

@@ -8,7 +8,7 @@ import (
 	"github.com/Briyantama/HRIS-Stery/services/document/application/queries"
 	"github.com/Briyantama/HRIS-Stery/services/document/domain"
 	"github.com/Briyantama/stery-kit/go/objstore"
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type docRepo struct {
@@ -31,16 +31,16 @@ type versionRepo struct {
 }
 
 func (versionRepo) GetVersionByNumber(_ context.Context, f domain.DocumentID, n int32) (*domain.DocumentVersion, error) {
-	return domain.NewDocumentVersion(f, n, "k", 1, uuid.NewString())
+	return domain.NewDocumentVersion(f, n, "k", 1, uuid.NewV7().String())
 }
 func (versionRepo) GetVersionsByDocumentID(context.Context, domain.DocumentID) ([]*domain.DocumentVersion, error) {
 	return nil, nil
 }
 
 var (
-	tenant = uuid.NewString()
-	owner  = uuid.NewString()
-	other  = uuid.NewString()
+	tenant = uuid.NewV7().String()
+	owner  = uuid.NewV7().String()
+	other  = uuid.NewV7().String()
 )
 
 func newDoc(t *testing.T, entityType domain.EntityType, entityID string, class domain.FileClassification) *domain.DocumentFile {
@@ -50,7 +50,7 @@ func newDoc(t *testing.T, entityType domain.EntityType, entityID string, class d
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := domain.NewDocumentFile(id, tid, uuid.NewString(), entityType, entityID,
+	doc, err := domain.NewDocumentFile(id, tid, uuid.NewV7().String(), entityType, entityID,
 		"contract.pdf", "application/pdf", 1, "b", "k", class, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func newDoc(t *testing.T, entityType domain.EntityType, entityID string, class d
 }
 
 func TestDocumentAccess(t *testing.T) {
-	hr := domain.Viewer{UserID: uuid.NewString(), HR: true}
+	hr := domain.Viewer{UserID: uuid.NewV7().String(), HR: true}
 	ownerV := domain.Viewer{UserID: owner}
 	otherV := domain.Viewer{UserID: other}
 
@@ -73,7 +73,7 @@ func TestDocumentAccess(t *testing.T) {
 		{"other employee", newDoc(t, domain.EntityTypeEmployee, owner, domain.ClassificationPublic), otherV, false},
 		{"hr sees all", newDoc(t, domain.EntityTypeEmployee, owner, domain.ClassificationSecret), hr, true},
 		{"owner blocked from secret", newDoc(t, domain.EntityTypeEmployee, owner, domain.ClassificationSecret), ownerV, false},
-		{"general doc of someone else", newDoc(t, domain.EntityTypeGeneral, uuid.NewString(), domain.ClassificationPublic), otherV, false},
+		{"general doc of someone else", newDoc(t, domain.EntityTypeGeneral, uuid.NewV7().String(), domain.ClassificationPublic), otherV, false},
 		{"empty user id", newDoc(t, domain.EntityTypeEmployee, owner, domain.ClassificationPublic), domain.Viewer{}, false},
 	}
 	for _, c := range cases {
