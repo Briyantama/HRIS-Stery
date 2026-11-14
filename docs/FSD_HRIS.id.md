@@ -2,6 +2,8 @@
 
 *Functional Specification Document, Sistem Manajemen SDM (HRIS) multi-tenant. Menjelaskan perilaku yang sudah ada di kode (status + bukti) dan arsitektur target yang diselaraskan ke stack standar Stery Suite (SELA).*
 
+Catatan status (2026-11-14): bukti as-is pada bagian 2-4 disesuaikan dengan ADR-0005/0006 (satu modul Go, sesi BFF); status FR tidak berubah kecuali disebut.
+
 | | |
 |---|---|
 | **Nama Dokumen** | FSD HRIS-Stery |
@@ -40,8 +42,8 @@ Dalam cakupan: modul 01-08 (AUTH, EMP, ATT, LEV, NTF, AUD, DOC, AI) dan persyara
 
 ### 1.3 Konvensi
 
-- **Status** (kosakata tetap): `Selesai` (perilaku terverifikasi benar di kode), `Sebagian` (ada tetapi cacat atau tidak lengkap, cacat diuraikan), `Belum` (tidak ada di kode), `Pending Verification` (kegagalan disimpulkan dari pembacaan statis, belum dijalankan), `Ditunda` (ditunda resmi, ADR-0004).
-- **Bukti:** jalur berkas relatif terhadap repo `HRIS-Stery` (tanpa awalan `HRIS-Stery/`), dalam kolom berjudul `Bukti`. Nomor baris, bila perlu, ditulis di luar tanda kutip balik. Jalur target (belum ada) hanya muncul di tabel delta 2.7 dan di teks, tidak pernah di kolom `Bukti`.
+- **Status** (kosakata tetap; padanan istilah baku `Done / Partial / Not started / Pending Verification / Deferred`): `Selesai` (Done; perilaku terverifikasi benar di kode), `Sebagian` (Partial; ada tetapi cacat atau tidak lengkap, cacat diuraikan), `Belum` (Not started; tidak ada di kode), `Pending Verification` (kegagalan disimpulkan dari pembacaan statis, belum dijalankan), `Ditunda` (Deferred; ditunda resmi, ADR-0004).
+- **Bukti:** jalur berkas relatif terhadap repo `HRIS-Stery` (tanpa awalan `HRIS-Stery/`), dalam kolom berjudul `Bukti`. Nomor baris, bila perlu, ditulis di luar tanda kutip balik. Jalur target (belum ada) hanya muncul di tabel delta 2.7 dan di teks, tidak pernah di kolom `Bukti`. **Pemetaan jalur (2026-11-14):** banyak baris masih mengutip tata letak sebelum konsolidasi (`services/<name>-service/...`, `services/_shared/...`, `apps/api-gateway/...`, `proto/...`); sejak ADR-0005 kode berada di `apps/api/services/<name>/...` (domain, application, infrastructure, `http.go`), kode bersama di repo saudara `stery-kit`, dan gateway Laravel serta `proto/` sudah tidak ada. Tabel 2.2-2.5 dan baris yang disebut pada catatan status di atas sudah disesuaikan; jalur tata letak lama yang tersisa adalah riwayat sampai barisnya diverifikasi ulang.
 - **Prioritas:** `M` (Must), `S` (Should), `C` (Could).
 - **ID:** `FR-HRS-<MM>.<n>` (MM = nomor modul katalog), `FR-HRS-SEC.<n>` untuk keamanan lintas modul. BR, D, Q, RISK didefinisikan di BRD; US di PRD; NFR-HRS direferensikan pada bagian 9. SELA dirujuk dengan ID aslinya (mis. `SELA FR-05.1`).
 - **Nilai bisnis yang tidak ditemukan di repo** (harga, SLA, kuota, ambang) ditulis `tbd` dengan rujukan Q-HRS. Dokumen ini tidak memuat angka `Rp` apa pun.
@@ -83,26 +85,36 @@ Stack target seluruh produk Stery Suite adalah stack SELA (keputusan pemilik; D-
 
 Catatan: pada mode `standalone` (bawaan) HRIS memakai stack di atas **dengan** pengguna, sesi, dan tenant miliknya sendiri; mode `suite` hanya mengganti adaptor identitas, entitlement, notifikasi, audit, dan peristiwa (2.3).
 
+Status implementasi 2026-11-08 (ADR-0005, ADR-0006). Baris 1-3, 5, 11, 12 dan 17 sudah terpenuhi: satu modul `apps/api` dengan `cmd/api`, `cmd/migrate` dan `services/<name>`, migrasi goose di `apps/api/internal/db/migrations`, slog, Postgres 18, `scripts/check.sh` dan CI. Kode bersama berasal dari repo saudara `stery-kit` (`httpx`, `health`, `objstore`, `migrate`, `testdb`, `pgtenant`, `events`, `authn`, `ratelimit`; npm `@stery/kit`), bukan folder `kit/` di repo suite. Bagian yang implementasinya berbeda dari tabel ini:
+
+| Baris | Seperti dibangun | Alasan |
+|---|---|---|
+| 4 | Hanya REST; tidak ada adaptor gRPC, `api/proto`, maupun `gen/go` | tidak ada klien mesin (ADR-0005, opsi C ditolak) |
+| 7, 10 | Dragonfly stream `hris:events` dengan empat consumer group dan idempotensi `processed_events`; tanpa outbox Postgres; peristiwa dipublikasikan setelah commit | ADR-0006 |
+| 9 | JWT RS256 diverifikasi di API (`authn.Authenticate`, peran per rute), refresh token dan daftar cabut di Dragonfly; web menyimpan access token di cookie HttpOnly (`hris_session`) di belakang proxy `/api` SvelteKit, tidak pernah di penyimpanan browser | ADR-0005; sesi buram tetap menjadi target (FR-HRS-SEC.4) |
+| 15 | SvelteKit 2.63 + Svelte 5 + Vite 8 + TypeScript 6 dengan rute server (aksi login, proxy `/api`, `adapter-auto`), bukan `ssr=false` + `adapter-static` | BFF cookie HttpOnly membutuhkan server |
+| 16 | `deploy/docker-compose.yml` (Dragonfly, RustFS, profil `api` opsional) dan `docker-compose.production.yml`; port API 8000 | port dipertahankan dari gateway sebelumnya |
+
 ### 2.2 Dekomposisi modul
 
-Kondisi saat ini: tujuh layanan Go mandiri, masing-masing dengan proses, skema Postgres, dan port gRPC sendiri, ditambah ai-service yang kosong. Target: satu proses `apps/api` dengan modul `services/<name>`.
+Kondisi saat ini (2026-11-14, ADR-0005): satu modul Go `apps/api` (`cmd/api`, `cmd/migrate`) dengan tujuh paket di `apps/api/services/<name>`, satu proses, satu biner. Sebelum 2026-11-08 ini adalah tujuh layanan mandiri dengan port gRPC sendiri (50051-50056, audit bentrok dengan leave di 50054) ditambah gateway Laravel; port tersebut sudah tidak ada. Modul `ai` belum memiliki paket.
 
-| Layanan saat ini | Skema | Port gRPC bawaan | Modul target (tanpa awalan repo) | Status | Bukti |
-|---|---|---|---|---|---|
-| auth-service | `auth` | 50051 | `services/auth` (modul 01) | Sebagian | `services/auth-service/cmd/server/main.go` |
-| employee-service | `employee` | 50052 | `services/employee` (modul 02) | Sebagian | `services/employee-service/cmd/server/main.go` |
-| attendance-service | `attendance` | 50053 | `services/attendance` (modul 03) | Sebagian | `services/attendance-service/cmd/server/main.go` |
-| leave-service | `leave` | 50054 | `services/leave` (modul 04) | Sebagian | `services/leave-service/cmd/server/main.go` |
-| notification-service | `notification` | 50055 | `services/notification` (modul 05) | Sebagian | `services/notification-service/cmd/server/main.go` |
-| audit-service | `audit` | 50054 (bentrok dengan leave-service) | `services/audit` (modul 06) | Sebagian | `services/audit-service/cmd/server/main.go` |
-| document-service | `document` | 50056 | `services/document` (modul 07) | Sebagian | `services/document-service/cmd/server/main.go` |
-| ai-service | (tidak ada) | (tidak ada) | `services/ai` (modul 08) | Belum | `go.work` (baris 13 dikomentari); `proto/hris/ai/v1/ai.proto` |
+| Modul | Skema | Paket (saat ini) | Status | Bukti |
+|---|---|---|---|---|
+| 01 auth | `auth` | `services/auth` | Sebagian | `apps/api/services/auth/http.go` |
+| 02 employee | `employee` | `services/employee` | Sebagian | `apps/api/services/employee/http.go` |
+| 03 attendance | `attendance` | `services/attendance` | Sebagian | `apps/api/services/attendance/http.go` |
+| 04 leave | `leave` | `services/leave` | Sebagian | `apps/api/services/leave/http.go` |
+| 05 notification | `notification` | `services/notification` | Sebagian | `apps/api/services/notification/http.go` |
+| 06 audit | `audit` | `services/audit` | Sebagian | `apps/api/services/audit/http.go` |
+| 07 document | `document` | `services/document` | Sebagian | `apps/api/services/document/http.go` |
+| 08 ai | (tidak ada) | (tidak ada) | Belum | `apps/api/cmd/api/main.go` (tanpa pengkabelan `ai`) |
 
 Hal yang diamati:
-- `leave-service` dan `audit-service` sama-sama mengikat gRPC bawaan `50054`; menjalankan keduanya di satu host tanpa menimpa konfigurasi akan bentrok (`Pending Verification`, bergantung env).
-- `ai-service` hanya memiliki kontrak proto (3 RPC); direktori `cmd/server/` kosong dan layanan dikomentari dari `go.work`.
-- Ada paket bersama `services/_shared` (config, database, errors, middleware, nats, observability, postgres, server, telemetry) yang menjadi bahan baku `kit/*` target (Bukti: `services/_shared/postgres/rls.go`, `services/_shared/server/grpc_interceptors.go`).
-- Struktur internal tiap layanan sudah mengikuti domain/application/infrastructure/interfaces (DDD ringan). Bagian domain dan aplikasi inilah yang dipertahankan pada penyelarasan (2.7).
+- Bentrok port gRPC antara leave dan audit sudah hilang: tidak ada server gRPC (ADR-0005, opsi C ditolak); semua modul dipasang pada satu `http.Server` di `apps/api/cmd/api/routes.go`.
+- `ai` tidak lagi memiliki paket maupun kontrak proto di repo.
+- `services/_shared` digantikan repo saudara `stery-kit` (httpx, health, objstore, migrate, testdb, pgtenant, events, authn, ratelimit) dan `apps/api/internal/{config,db,testdb,ttlcache}`.
+- Struktur internal tiap modul masih mengikuti domain/application/infrastructure ditambah adaptor `http.go`. Bagian domain dan aplikasi inilah yang dipertahankan pada penyelarasan (2.7).
 
 ### 2.3 Komponen antarmuka
 
@@ -110,12 +122,11 @@ Hal yang diamati:
 
 | Komponen | Perilaku | Status | Bukti |
 |---|---|---|---|
-| Web SvelteKit (SSR) | Empat halaman; login memanggil `http://localhost:3000/api/auth/login` (nilai tetap, bukan gateway nyata); klien API tidak mengirim header Authorization | Sebagian | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/api/client.ts` |
-| Gateway Laravel 11 | Rute `auth/login`, `auth/refresh`, `auth/logout`, `health`, `/v1/leaves*`, `leave-balance/{employeeId}`, `leave-types`; rute employee/attendance/document/audit hanya komentar (baris 100-108); middleware `throttle` tidak pernah dipasang; Sanctum dan spatie/permission terpasang tetapi tidak dipakai | Sebagian | `apps/api-gateway/routes/api.php`, `apps/api-gateway/composer.json` |
-| Klien gateway ke layanan | `BaseGrpcGatewayClient` memanggil jalur HTTP grpc-gateway; `AuthServiceClient` memanggil jalur gRPC asli `/hris.auth.v1.AuthService/Login`, bukan `/v1/auth/login` | Sebagian | `apps/api-gateway/app/Services/BaseGrpcGatewayClient.php`, `apps/api-gateway/app/Services/AuthServiceClient.php` |
-| Jalur HTTP grpc-gateway | Tidak ada `runtime.NewServeMux` atau `ListenAndServe` di `services/**` di luar `*.pb.gw.go`; jalur HTTP yang dipanggil gateway tidak pernah disajikan (11.3) | Belum | `services/auth-service/cmd/server/main.go` |
-| gRPC antar layanan | Server gRPC tiap layanan dengan interseptor bersama; tidak ada autentikasi/otorisasi di interseptor; mTLS tidak ada | Sebagian | `services/_shared/server/grpc_interceptors.go` |
-| HTTP metrik | `StartMetricsServer` mengikat `:8081` untuk semua layanan | Sebagian | `services/_shared/observability/metrics.go` |
+| Web SvelteKit (BFF) | Aksi formulir login mengirim POST ke API Go `/api/v1/auth/login` dan menyimpan access token di cookie HttpOnly `hris_session`; `/api/<path>` adalah proxy BFF yang menyertakan bearer token; klien API di browser tidak mengirim header Authorization | Sebagian | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/routes/api/[...path]/+server.ts`, `apps/web/src/lib/server/session.ts` |
+| API HTTP Go | Satu `net/http` ServeMux di `cmd/api` yang memasang semua modul di `/api/v1`; peran ditegakkan per rute lewat `authn`; gateway Laravel 11 (Sanctum, spatie/permission, `BaseGrpcGatewayClient`) dan jalur grpc-gateway dihapus oleh ADR-0005 | Sebagian | `apps/api/cmd/api/routes.go`, `apps/api/cmd/api/main.go` |
+| Pembatasan laju | Tidak diterapkan: tidak ada limiter yang dipasang di `cmd/api` (middleware `throttle` Laravel hilang bersama gateway) | Belum | `apps/api/cmd/api/routes.go` |
+| Panggilan antarmodul | Antarmuka Go dalam proses (`deps.go` per modul); tanpa gRPC, mTLS tidak diperlukan | Sebagian | `apps/api/services/leave/deps.go` |
+| HTTP metrik | tidak ada endpoint Prometheus/metrik di `apps/api`; observabilitas memakai `log/slog` dan `/healthz` | Belum | `apps/api/cmd/api/routes.go` |
 
 **Target (to-be), per D-HRS-12 dan STACK-SPEC 4, 9:**
 
@@ -130,12 +141,13 @@ Adaptor `standalone` memakai tabel pengguna, sesi, peran, dan audit milik HRIS. 
 
 ### 2.4 Penggunaan Dragonfly
 
-**Saat ini:** Redis 7 dipakai hanya oleh auth-service: kunci `refresh_token:<sha256>` dan `revoked_token:<hash>`; tidak ada deteksi pemakaian ulang refresh token per keluarga. Cache department/employee di employee-service dan leave-service adalah peta dalam proses dengan TTL 24 jam, bukan Redis.
+**Saat ini:** Dragonfly (protokol Redis, `go-redis/v9`) menyimpan refresh token, daftar cabut, dan stream peristiwa `hris:events` (ADR-0006). Cache department/position di employee dan cache pencarian di leave adalah peta dalam proses dengan TTL, bukan Dragonfly.
 
 | Penggunaan | Status | Bukti |
 |---|---|---|
-| Refresh token dan daftar cabut di Redis | Sebagian | `services/auth-service/internal/infrastructure/token_service.go`, `services/auth-service/internal/application/commands/refresh_token.go` |
-| Cache departemen dalam proses (TTL 24 jam) | Sebagian | `services/employee-service/internal/infrastructure/cache/department_cache.go` |
+| Refresh token dan daftar cabut di Dragonfly | Sebagian | `apps/api/services/auth/infrastructure/token_service.go`, `apps/api/services/auth/application/commands/refresh_token.go` |
+| Cache departemen dalam proses (TTL) | Sebagian | `apps/api/services/employee/infrastructure/cache/department_cache.go` |
+| Stream peristiwa `hris:events` | Sebagian | `apps/api/cmd/api/main.go` |
 
 **Target:** satu instans Dragonfly per produk pada profil suite (port 6381 untuk HRIS, 6379 pada profil standalone). Kunci dan kegunaannya:
 
@@ -150,7 +162,7 @@ Adaptor `standalone` memakai tabel pengguna, sesi, peran, dan audit milik HRIS. 
 
 ### 2.5 Event dan outbox
 
-**Saat ini (NATS JetStream, ADR-0003):** stream `HRIS_EVENTS` pada subjek `hris.>` (dibuat di `services/audit-service/cmd/server/main.go`). Amplop dasar: `event_id`, `event_type`, `schema_version` (=1), `tenant_id`, `actor_id`, `occurred_at`, `payload`.
+**Saat ini:** NATS JetStream dihapus oleh ADR-0006; peristiwa kini mengalir lewat Dragonfly stream `hris:events` (`apps/api/cmd/api/main.go`) dengan publisher di `apps/api/services/<name>/infrastructure/` dan consumer di `apps/api/services/notification/consumers.go` dan `apps/api/services/audit/consumers.go`. Tabel peristiwa di bawah adalah as-is sebelum konsolidasi (NATS, ADR-0003); subjek dan cacatnya adalah riwayat sampai diverifikasi ulang. Amplop dasar: `event_id`, `event_type`, `schema_version` (=1), `tenant_id`, `actor_id`, `occurred_at`, `payload`.
 
 | Subjek / jenis peristiwa (as-is) | Produsen | Konsumen yang ada | Status | Bukti |
 |---|---|---|---|---|
@@ -286,7 +298,7 @@ Layanan `auth-service` memiliki enam RPC dan keenamnya memiliki handler berisi (
 | ID | Requirement | Prioritas | Status | Bukti |
 |---|---|---|---|---|
 | FR-HRS-01.1 | Tenant mendaftar sendiri (nama, slug unik, admin pertama). Dalam satu transaksi atomik dibuat tenant, tiga peran sistem, izin bawaan, dan pengguna admin berperan `hr_admin`; peristiwa `tenant_registered` dan `user_registered` dipancarkan lewat outbox | M | Sebagian: handler dan aturan ada, tetapi pembuatan tidak atomik dan INSERT/UPDATE `auth.tenants` hanya diberikan ke peran `hris_admin` sehingga gagal di bawah DSN bawaan `hris_app` (`Pending Verification`, belum dijalankan) | `services/auth-service/internal/application/commands/register_tenant.go` |
-| FR-HRS-01.2 | Login dengan email + kata sandi; sukses menerbitkan sesi buram (cookie HttpOnly Secure) berisi tenant, pengguna, peran; kredensial salah tidak membedakan "email tidak ada" dan "sandi salah" | M | Sebagian: handler `Login` ada dan menerbitkan JWT; web memakai login tiruan ke `localhost:3000` dan `setSession` tidak pernah dipanggil | `services/auth-service/internal/application/commands/login.go`, `apps/web/src/routes/(auth)/login/+page.server.ts` |
+| FR-HRS-01.2 | Login dengan email + kata sandi; sukses menerbitkan sesi buram (cookie HttpOnly Secure) berisi tenant, pengguna, peran; kredensial salah tidak membedakan "email tidak ada" dan "sandi salah" | M | Sebagian: handler `Login` ada dan menerbitkan JWT; aksi login web memanggil API Go dan menyimpan token di cookie HttpOnly `hris_session` (tiruan ke `localhost:3000` sudah teratasi); sesi berupa JWT, bukan sesi buram | `apps/api/services/auth/application/commands/login.go`, `apps/web/src/routes/(auth)/login/+page.server.ts` |
 | FR-HRS-01.3 | Kebijakan kata sandi: 8-128 karakter dengan huruf besar, kecil, angka, simbol; hash bcrypt (skema hash dipertahankan, D-HRS-06 dan D10); slug tenant 3-50 karakter `^[a-z0-9-]+$` | M | Selesai | `services/auth-service/internal/domain/user.go` |
 | FR-HRS-01.4 | Siklus hidup sesi: terbit, validasi (introspeksi), perpanjang, cabut/logout; kedaluwarsa dengan TTL `tbd` (Q-HRS-11); hanya hash sesi disimpan di Dragonfly. As-is: JWT RS256 15 menit + refresh 7 hari (hardcoded), refresh dan daftar cabut di Redis | M | Sebagian: refresh dan cabut ada tetapi tanpa deteksi pemakaian ulang keluarga token; TTL hardcoded di `cmd/server/main.go` baris 81 | `services/auth-service/internal/application/commands/refresh_token.go`, `services/auth-service/internal/application/commands/revoke_token.go`, `services/auth-service/internal/infrastructure/jwt_signer.go` |
 | FR-HRS-01.5 | Penguncian akun setelah percobaan gagal berulang (ambang dan durasi `tbd`) dan pembatasan laju login per alamat dan per akun | M | Belum: tabel `login_attempts` ada di skema tetapi tidak dipakai; tidak ada kode lockout | `services/auth-service/migrations/001_create_auth_schema.up.sql` |
@@ -542,7 +554,7 @@ Persyaratan berikut berlaku lintas modul 4.01 sampai 4.08; kolom Requirement men
 | FR-HRS-SEC.3 | NIK, NPWP, tanggal lahir dienkripsi `kit/piicrypt` dengan indeks buta; data lama dienkripsi saat migrasi; kolom `TEXT` polos dihapus | M | Belum | `services/employee-service/migrations/001_create_employee_schema.up.sql` |
 | FR-HRS-SEC.4 | Sesi buram: cookie HttpOnly Secure SameSite, hash di Dragonfly, tanpa JWT dan tanpa token di peramban; tenant dan aktor selalu dari sesi | M | Belum: JWT dan cookie `auth_user` terbaca klien | `services/auth-service/internal/infrastructure/jwt_signer.go`, `apps/web/src/lib/stores/auth.ts` |
 | FR-HRS-SEC.5 | Deny-by-default: interseptor/middleware menolak setiap rute/RPC tanpa izin eksplisit; rute internal memakai token layanan HMAC | M | Belum | `services/_shared/server/grpc_interceptors.go` |
-| FR-HRS-SEC.6 | Pembatasan laju login dan endpoint sensitif per alamat dan per akun dengan Dragonfly; ambang `tbd` | M | Belum | `apps/api-gateway/routes/api.php` |
+| FR-HRS-SEC.6 | Pembatasan laju login dan endpoint sensitif per alamat dan per akun dengan Dragonfly; ambang `tbd` | M | Belum | `apps/api/cmd/api/routes.go` |
 | FR-HRS-SEC.7 | Tidak ada rahasia atau kredensial bawaan di kode maupun berkas terlacak; rahasia dari env dengan validasi gagal-cepat; `.env.example`; rahasia yang pernah dikomit dirotasi dan dipurge dari riwayat | M | Sebagian: konfigurasi dari env ada tetapi kredensial dev tertulis di berkas terlacak dan nilai bawaan ada di kode | `services/_shared/config/loader.go`, `deploy/docker/docker-compose.yml` |
 | FR-HRS-SEC.8 | Hak subjek data: HR dapat mengekspor/mengoreksi/menghapus data satu karyawan atas permintaan, tercatat di audit; dasar pemrosesan dan persetujuan dicatat | S | Belum | `services/employee-service/internal/interfaces/grpc/employee_service.go` |
 | FR-HRS-SEC.9 | Header keamanan web (CSP, `X-Content-Type-Options`, HSTS, `Referrer-Policy`), CORS ketat, proteksi CSRF untuk cookie sesi | S | Belum | `apps/web/svelte.config.js` |
@@ -757,7 +769,7 @@ Bagian ini menerjemahkan NFR-HRS (didefinisikan di `PRD_HRIS.id.md` bagian 6) me
 | NFR-HRS-05 | `audit_logs` append-only dengan trigger penolak UPDATE/DELETE/TRUNCATE (FR-HRS-06.4) | uji integrasi yang mencoba UPDATE/DELETE harus gagal | Sebagian | `services/audit-service/migrations/001_create_audit_schema.up.sql` |
 | NFR-HRS-06 | Target ketersediaan `tbd`; `/healthz`; restart otomatis oleh pengelola proses | pemantauan; target hosting belum ada (Q-HRS-12) | Belum | `docker-compose.production.yml` |
 | NFR-HRS-07 | Latensi p95 `tbd`; indeks sesuai pola kueri; paginasi wajib | uji beban pada tumpukan nyata (belum ada) | Belum | `services/leave-service/migrations/002_add_performance_indexes.up.sql` |
-| NFR-HRS-08 | Pembatas laju Dragonfly (skrip Lua) per alamat/akun dan kelas rute; penguncian akun (FR-HRS-01.5, FR-HRS-SEC.6) | uji integrasi: N percobaan gagal menghasilkan 429 | Belum | `apps/api-gateway/routes/api.php` |
+| NFR-HRS-08 | Pembatas laju Dragonfly (skrip Lua) per alamat/akun dan kelas rute; penguncian akun (FR-HRS-01.5, FR-HRS-SEC.6) | uji integrasi: N percobaan gagal menghasilkan 429 | Belum | `apps/api/cmd/api/routes.go` |
 | NFR-HRS-09 | Migrasi goose reversibel; job CI `up -> down -> up` untuk **semua** modul pada DB segar | job CI hijau | Sebagian: CI menjalankan `up -> down -> up` hanya untuk auth, employee, leave dengan golang-migrate; attendance, audit, notification, document tidak tercakup, dan migrasi absensi tidak valid | `.github/workflows/ci-go.yml` |
 | NFR-HRS-10 | `scripts/check.sh` seperti SELA; cakupan >= 80%; `-race` | CI hijau; ambang cakupan | Sebagian: CI Go memakai `-race`, tetapi `GO_VERSION` CI 1.24 sedangkan `go.work` 1.25.0; tidak ada ambang cakupan; document-service tanpa berkas uji | `.github/workflows/ci-go.yml`, `go.work` |
 | NFR-HRS-11 | `slog` JSON tanpa PII, `/healthz`; OTel/Prometheus opsional (Q-HRS-08) | uji log tidak memuat PII; `/healthz` hijau | Sebagian: OTel `InitTracer` dan `NewMetricsRegistry` didefinisikan di `_shared` tetapi tidak pernah dipanggil layanan; `StartMetricsServer` mengikat `:8081` untuk semua layanan | `services/_shared/observability/otel.go`, `services/_shared/observability/metrics.go` |
@@ -778,7 +790,7 @@ Bagian ini menerjemahkan NFR-HRS (didefinisikan di `PRD_HRIS.id.md` bagian 6) me
 | Rute web | Fungsi | Status | Bukti |
 |---|---|---|---|
 | `/` | halaman awal | Sebagian | `apps/web/src/routes/+page.svelte` |
-| `/login` | formulir login; aksi server memanggil `http://localhost:3000/api/auth/login` (nilai tetap, bukan backend nyata); setelah sukses mengisi cookie `auth_token` (HttpOnly) dan `auth_user` (bukan HttpOnly) | Sebagian | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/routes/(auth)/login/+page.svelte` |
+| `/login` | formulir login; aksi server mengirim POST ke API Go `/api/v1/auth/login` dan mengisi cookie HttpOnly `hris_session` (token dan peran) lewat session store | Sebagian | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/server/session.ts` |
 | `/dashboard` | dasbor pengguna | Sebagian | `apps/web/src/routes/(app)/dashboard/+page.svelte` |
 | `/leaves/apply` | form pengajuan cuti | Sebagian | `apps/web/src/routes/(app)/leaves/apply/+page.svelte` |
 | `/admin/leaves` | antrean persetujuan cuti untuk manajer/HR; proteksi peran di hook server membaca peran dari cookie `auth_user` | Sebagian | `apps/web/src/routes/(app)/admin/leaves/+page.svelte`, `apps/web/src/hooks.server.ts` |
@@ -819,7 +831,7 @@ Rujukan ringkas; definisi lengkap tiap FR ada di bagian 4 dan 8.4.
 | FR | Status | Celah utama | Bukti |
 |---|---|---|---|
 | FR-HRS-01.1 | Sebagian | tidak atomik; hak `auth.tenants` hanya `hris_admin` | `services/auth-service/internal/application/commands/register_tenant.go` |
-| FR-HRS-01.2 | Sebagian | web memakai login tiruan; JWT bukan sesi buram | `services/auth-service/internal/application/commands/login.go` |
+| FR-HRS-01.2 | Sebagian | login web kini memanggil API Go (tiruan teratasi); JWT bukan sesi buram | `apps/api/services/auth/application/commands/login.go` |
 | FR-HRS-01.3 | Selesai | - | `services/auth-service/internal/domain/user.go` |
 | FR-HRS-01.4 | Sebagian | tanpa deteksi pemakaian ulang; TTL hardcoded | `services/auth-service/internal/application/commands/refresh_token.go` |
 | FR-HRS-01.5 | Belum | `login_attempts` tidak dipakai | `services/auth-service/migrations/001_create_auth_schema.up.sql` |
@@ -887,7 +899,7 @@ Rujukan ringkas; definisi lengkap tiap FR ada di bagian 4 dan 8.4.
 | FR-HRS-SEC.3 | Belum | PII polos | `services/employee-service/migrations/001_create_employee_schema.up.sql` |
 | FR-HRS-SEC.4 | Belum | JWT | `services/auth-service/internal/infrastructure/jwt_signer.go` |
 | FR-HRS-SEC.5 | Belum | tanpa authn/authz | `services/_shared/server/grpc_interceptors.go` |
-| FR-HRS-SEC.6 | Belum | `throttle` tidak dipasang | `apps/api-gateway/routes/api.php` |
+| FR-HRS-SEC.6 | Belum | tidak ada pembatas laju yang dipasang di `cmd/api` | `apps/api/cmd/api/routes.go` |
 | FR-HRS-SEC.7 | Sebagian | kredensial dev terlacak | `deploy/docker/docker-compose.yml` |
 | FR-HRS-SEC.8 | Belum | - | `services/employee-service/internal/interfaces/grpc/employee_service.go` |
 | FR-HRS-SEC.9 | Belum | - | `apps/web/svelte.config.js` |
@@ -935,9 +947,9 @@ Bagian ini mencatat klaim dokumen status, ADR, dan `CLAUDE.md` yang **bertentang
 |---|---|---|
 | Migrasi absensi 001 tidak valid | Baris 25 `CONSTRAINT attendance_unique_per_day UNIQUE (tenant_id, employee_id, date) WHERE NOT is_override` bukan sintaks PostgreSQL yang sah (klausa `WHERE` hanya untuk indeks unik). Baris 45-46 `GRANT ... TO app` memakai peran `app`, bukan `hris_app`; skrip init hanya membuat `hris_app` dan `hris_admin`. RLS `ENABLE` tanpa `FORCE` dan kebijakan tanpa `WITH CHECK`. Peran `app` dipakai juga oleh migrasi leave dan notification. | `services/attendance-service/migrations/001_create_attendance_schema.up.sql`, `deploy/docker/init-postgres.sql` |
 | Indeks duplikat | Absensi 002 (`idx_attendance_employee_date`) dan leave 002 (`idx_leave_requests_employee_id`, `_status`, `_approved_by`) membuat indeks bernama sama dengan migrasi 001 tanpa `IF NOT EXISTS` (`Pending Verification`, belum dijalankan) | `services/attendance-service/migrations/002_add_performance_indexes.up.sql`, `services/leave-service/migrations/002_add_performance_indexes.up.sql` |
-| Tidak ada HTTP mux yang dipasang | Tidak ada `runtime.NewServeMux` atau `ListenAndServe` di `services/**` di luar berkas `*.pb.gw.go`. Jalur HTTP grpc-gateway yang dipanggil gateway Laravel tidak pernah disajikan; ADR-0001 menyatakan gateway dijalankan di tiap layanan. Satu-satunya HTTP yang ada adalah server metrik `:8081` (`StartMetricsServer`). Berkas `*.pb.gw.go` berada di `gen/go` yang diabaikan git. | `services/auth-service/cmd/server/main.go`, `services/_shared/observability/metrics.go`, `docs/adr/0001-grpc-gateway-over-grpc-php.md` |
-| Login web adalah tiruan | `apps/web/src/routes/(auth)/login/+page.server.ts` baris 38-40 memanggil `http://localhost:3000/api/auth/login`, bukan gateway/layanan; `setSession` di `src/lib/stores/auth.ts` baris 58 tidak punya pemanggil | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/stores/auth.ts` |
-| Klien gateway tidak menyampaikan token | `getBearerToken()` mengembalikan string kosong; `AuthServiceClient` memanggil jalur gRPC asli `/hris.auth.v1.AuthService/Login`, bukan `/v1/auth/login` | `apps/api-gateway/app/Services/BaseGrpcGatewayClient.php`, `apps/api-gateway/app/Services/AuthServiceClient.php` |
+| Tidak ada HTTP mux yang dipasang (teratasi 2026-11-14) | Semula: tidak ada `runtime.NewServeMux` atau `ListenAndServe` di layanan mandiri; jalur grpc-gateway yang dipanggil gateway Laravel tidak pernah disajikan. ADR-0005 menghapus gateway, gRPC, dan grpc-gateway; `cmd/api` kini menyajikan REST pada satu `net/http` ServeMux | `apps/api/cmd/api/routes.go`, `apps/api/cmd/api/main.go`, `docs/adr/0005-single-module-go-api-on-sela-stack.md` |
+| Login web adalah tiruan (teratasi 2026-11-14) | `apps/web/src/routes/(auth)/login/+page.server.ts` kini mengirim POST ke `${apiUrl()}/api/v1/auth/login` dan menulis cookie `hris_session` lewat `session.write`; panggilan `localhost:3000` dan fungsi store `setSession` yang tidak terpakai sudah hilang | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/server/session.ts` |
+| Klien gateway tidak menyampaikan token (teratasi 2026-11-14) | Semula: `getBearerToken()` mengembalikan string kosong di klien gateway Laravel. Gateway dihapus (ADR-0005); proxy BFF SvelteKit kini menyertakan bearer token dari cookie `hris_session` | `apps/web/src/routes/api/[...path]/+server.ts`, `docs/adr/0005-single-module-go-api-on-sela-stack.md` |
 | Dokumen: RPC kosong | `GetPresignedUrl`, `RollbackDocumentVersion` kosong (`document_service.go` baris 215-221) dan `DownloadDocument` juga placeholder; `UploadDocument` selalu `Unauthenticated` karena `actor_id` tidak pernah diisi | `services/document-service/internal/interfaces/grpc/document_service.go`, `services/document-service/internal/interfaces/grpc/mapping.go` |
 | Notifikasi tidak terkirim | `cmd/server/main.go` baris 112-132 menetapkan `_ = emailAdapter` dan `_ = inAppAdapter` | `services/notification-service/cmd/server/main.go` |
 | Payload peristiwa kosong | Peristiwa leave memuat field privat tanpa `MarshalJSON`, sehingga `payload` `{}`; `ApplyLeave` tidak mengisi `DaysCount` | `services/leave-service/internal/infrastructure/nats/event_publisher.go`, `services/leave-service/internal/domain/events.go` |

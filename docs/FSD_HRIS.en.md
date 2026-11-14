@@ -2,6 +2,8 @@
 
 *Functional Specification Document, multi-tenant Human Resource Management System (HRIS). Describes the behaviour that already exists in the code (status + evidence) and the target architecture aligned to the standard Stery Suite stack (SELA).*
 
+Status note (2026-11-14): sections 2-4 as-is evidence reconciled with ADR-0005/0006 (single Go module, BFF session); FR statuses unchanged unless stated.
+
 | | |
 |---|---|
 | **Document Name** | FSD HRIS-Stery |
@@ -40,8 +42,8 @@ In scope: modules 01-08 (AUTH, EMP, ATT, LEV, NTF, AUD, DOC, AI) and cross-modul
 
 ### 1.3 Conventions
 
-- **Status** (fixed vocabulary): `Selesai` (behaviour verified correct in code), `Sebagian` (exists but defective or incomplete, defect described), `Belum` (not in code), `Pending Verification` (failure inferred from static reading, not yet run), `Ditunda` (officially deferred, ADR-0004).
-- **Evidence:** file paths relative to the `HRIS-Stery` repo (without the `HRIS-Stery/` prefix), in a column titled `Evidence`. Line numbers, when needed, are written outside the backticks. Target paths (not yet existing) appear only in the delta table 2.7 and in text, never in the `Evidence` column.
+- **Status** (fixed vocabulary): `Done` (behaviour verified correct in code), `Partial` (exists but defective or incomplete, defect described), `Not started` (not in code), `Pending Verification` (failure inferred from static reading, not yet run), `Deferred` (officially deferred, ADR-0004).
+- **Evidence:** file paths relative to the `HRIS-Stery` repo (without the `HRIS-Stery/` prefix), in a column titled `Evidence`. Line numbers, when needed, are written outside the backticks. Target paths (not yet existing) appear only in the delta table 2.7 and in text, never in the `Evidence` column. **Path mapping (2026-11-14):** many rows still cite the pre-consolidation layout (`services/<name>-service/...`, `services/_shared/...`, `apps/api-gateway/...`, `proto/...`); since ADR-0005 the code lives in `apps/api/services/<name>/...` (domain, application, infrastructure, `http.go`), shared code in the sibling repo `stery-kit`, and the Laravel gateway and `proto/` no longer exist. The 2.2-2.5 tables and the rows named in the Status note below are reconciled; remaining old-layout paths are history until their row is re-verified.
 - **Priority:** `M` (Must), `S` (Should), `C` (Could).
 - **IDs:** `FR-HRS-<MM>.<n>` (MM = catalogue module number), `FR-HRS-SEC.<n>` for cross-module security. BR, D, Q, RISK are defined in the BRD; US in the PRD; NFR-HRS is referenced in section 9. SELA is cited by its own IDs (e.g. `SELA FR-05.1`).
 - **Business values not found in the repo** (prices, SLAs, quotas, thresholds) are written `tbd` with a Q-HRS reference. This document contains no `Rp` figure.
@@ -95,24 +97,24 @@ Implementation status 2026-11-08 (ADR-0005, ADR-0006). Rows 1-3, 5, 11, 12 and 1
 
 ### 2.2 Module decomposition
 
-Current state: seven standalone Go services, each with its own process, Postgres schema and gRPC port, plus an empty ai-service. Target: a single `apps/api` process with `services/<name>` modules.
+Current state (2026-11-14, ADR-0005): one Go module `apps/api` (`cmd/api`, `cmd/migrate`) with seven packages under `apps/api/services/<name>`, one process, one binary. Before 2026-11-08 these were seven standalone services with their own gRPC ports (50051-50056, audit collided with leave on 50054) plus a Laravel gateway; those ports no longer exist. The `ai` module has no package yet.
 
-| Current service | Schema | Default gRPC port | Target module (without repo prefix) | Status | Evidence |
-|---|---|---|---|---|---|
-| auth-service | `auth` | 50051 | `services/auth` (module 01) | Partial | `services/auth-service/cmd/server/main.go` |
-| employee-service | `employee` | 50052 | `services/employee` (module 02) | Partial | `services/employee-service/cmd/server/main.go` |
-| attendance-service | `attendance` | 50053 | `services/attendance` (module 03) | Partial | `services/attendance-service/cmd/server/main.go` |
-| leave-service | `leave` | 50054 | `services/leave` (module 04) | Partial | `services/leave-service/cmd/server/main.go` |
-| notification-service | `notification` | 50055 | `services/notification` (module 05) | Partial | `services/notification-service/cmd/server/main.go` |
-| audit-service | `audit` | 50054 (collides with leave-service) | `services/audit` (module 06) | Partial | `services/audit-service/cmd/server/main.go` |
-| document-service | `document` | 50056 | `services/document` (module 07) | Partial | `services/document-service/cmd/server/main.go` |
-| ai-service | (none) | (none) | `services/ai` (module 08) | Not started | `go.work` (line 13 commented out); `proto/hris/ai/v1/ai.proto` |
+| Module | Schema | Package (current) | Status | Evidence |
+|---|---|---|---|---|
+| 01 auth | `auth` | `services/auth` | Partial | `apps/api/services/auth/http.go` |
+| 02 employee | `employee` | `services/employee` | Partial | `apps/api/services/employee/http.go` |
+| 03 attendance | `attendance` | `services/attendance` | Partial | `apps/api/services/attendance/http.go` |
+| 04 leave | `leave` | `services/leave` | Partial | `apps/api/services/leave/http.go` |
+| 05 notification | `notification` | `services/notification` | Partial | `apps/api/services/notification/http.go` |
+| 06 audit | `audit` | `services/audit` | Partial | `apps/api/services/audit/http.go` |
+| 07 document | `document` | `services/document` | Partial | `apps/api/services/document/http.go` |
+| 08 ai | (none) | (none) | Not started | `apps/api/cmd/api/main.go` (no `ai` wiring) |
 
 Observations:
-- `leave-service` and `audit-service` both bind the default gRPC `50054`; running both on one host without overriding the configuration will collide (`Pending Verification`, depends on env).
-- `ai-service` only has a proto contract (3 RPCs); the `cmd/server/` directory is empty and the service is commented out of `go.work`.
-- There is a shared package `services/_shared` (config, database, errors, middleware, nats, observability, postgres, server, telemetry) that is the raw material for the target `kit/*` (Evidence: `services/_shared/postgres/rls.go`, `services/_shared/server/grpc_interceptors.go`).
-- The internal structure of each service already follows domain/application/infrastructure/interfaces (light DDD). These domain and application parts are what is kept during alignment (2.7).
+- The gRPC port collision between leave and audit is gone: there is no gRPC server (ADR-0005, option C rejected); all modules are mounted on one `http.Server` in `apps/api/cmd/api/routes.go`.
+- `ai` has neither package nor proto contract in the repo any more.
+- `services/_shared` was replaced by the sibling repo `stery-kit` (httpx, health, objstore, migrate, testdb, pgtenant, events, authn, ratelimit) and `apps/api/internal/{config,db,testdb,ttlcache}`.
+- The internal structure of each module still follows domain/application/infrastructure plus an `http.go` adapter. These domain and application parts are what is kept during alignment (2.7).
 
 ### 2.3 Interface components
 
@@ -120,12 +122,11 @@ Observations:
 
 | Component | Behaviour | Status | Evidence |
 |---|---|---|---|
-| SvelteKit web (SSR) | Four pages; login calls `http://localhost:3000/api/auth/login` (hard-coded value, not a real gateway); the API client does not send an Authorization header | Partial | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/api/client.ts` |
-| Laravel 11 gateway | Routes `auth/login`, `auth/refresh`, `auth/logout`, `health`, `/v1/leaves*`, `leave-balance/{employeeId}`, `leave-types`; employee/attendance/document/audit routes are only comments (lines 100-108); the `throttle` middleware is never applied; Sanctum and spatie/permission are installed but unused | Partial | `apps/api-gateway/routes/api.php`, `apps/api-gateway/composer.json` |
-| Gateway client to services | `BaseGrpcGatewayClient` calls the grpc-gateway HTTP path; `AuthServiceClient` calls the real gRPC path `/hris.auth.v1.AuthService/Login`, not `/v1/auth/login` | Partial | `apps/api-gateway/app/Services/BaseGrpcGatewayClient.php`, `apps/api-gateway/app/Services/AuthServiceClient.php` |
-| grpc-gateway HTTP path | There is no `runtime.NewServeMux` or `ListenAndServe` in `services/**` outside `*.pb.gw.go`; the HTTP path the gateway calls is never served (11.3) | Not started | `services/auth-service/cmd/server/main.go` |
-| Inter-service gRPC | Each service's gRPC server with a shared interceptor; no authentication/authorisation in the interceptor; no mTLS | Partial | `services/_shared/server/grpc_interceptors.go` |
-| Metrics HTTP | `StartMetricsServer` binds `:8081` for all services | Partial | `services/_shared/observability/metrics.go` |
+| SvelteKit web (BFF) | Login form action posts to the Go API `/api/v1/auth/login` and stores the access token in the HttpOnly cookie `hris_session`; `/api/<path>` is a BFF proxy that attaches the bearer token; the browser API client sends no Authorization header | Partial | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/routes/api/[...path]/+server.ts`, `apps/web/src/lib/server/session.ts` |
+| Go HTTP API | One `net/http` ServeMux in `cmd/api` mounting every module under `/api/v1`; roles enforced per route via `authn`; the Laravel 11 gateway (Sanctum, spatie/permission, `BaseGrpcGatewayClient`) and the grpc-gateway path were removed in ADR-0005 | Partial | `apps/api/cmd/api/routes.go`, `apps/api/cmd/api/main.go` |
+| Rate limiting | Not applied: no limiter is wired in `cmd/api` (the Laravel `throttle` middleware went away with the gateway) | Not started | `apps/api/cmd/api/routes.go` |
+| Inter-module calls | Go interfaces in-process (`deps.go` per module); no gRPC, no mTLS needed | Partial | `apps/api/services/leave/deps.go` |
+| Metrics HTTP | no Prometheus/metrics endpoint in `apps/api`; observability is `log/slog` and `/healthz` | Not started | `apps/api/cmd/api/routes.go` |
 
 **Target (to-be), per D-HRS-12 and STACK-SPEC 4, 9:**
 
@@ -140,12 +141,13 @@ The `standalone` adapter uses HRIS's own user, session, role and audit tables. T
 
 ### 2.4 Dragonfly usage
 
-**Current:** Redis 7 is used only by auth-service: keys `refresh_token:<sha256>` and `revoked_token:<hash>`; there is no per-family refresh token reuse detection. The department/employee caches in employee-service and leave-service are in-process maps with a 24-hour TTL, not Redis.
+**Current:** Dragonfly (Redis protocol, `go-redis/v9`) holds refresh tokens, the revocation list and the event stream `hris:events` (ADR-0006). The department/position caches in employee and the lookup caches in leave are in-process maps with a TTL, not Dragonfly.
 
 | Usage | Status | Evidence |
 |---|---|---|
-| Refresh tokens and revocation list in Redis | Partial | `services/auth-service/internal/infrastructure/token_service.go`, `services/auth-service/internal/application/commands/refresh_token.go` |
-| In-process department cache (24-hour TTL) | Partial | `services/employee-service/internal/infrastructure/cache/department_cache.go` |
+| Refresh tokens and revocation list in Dragonfly | Partial | `apps/api/services/auth/infrastructure/token_service.go`, `apps/api/services/auth/application/commands/refresh_token.go` |
+| In-process department cache (TTL) | Partial | `apps/api/services/employee/infrastructure/cache/department_cache.go` |
+| Event stream `hris:events` | Partial | `apps/api/cmd/api/main.go` |
 
 **Target:** one Dragonfly instance per product in the suite profile (port 6381 for HRIS, 6379 in the standalone profile). Keys and their purposes:
 
@@ -160,7 +162,7 @@ The `standalone` adapter uses HRIS's own user, session, role and audit tables. T
 
 ### 2.5 Events and outbox
 
-**Current (NATS JetStream, ADR-0003):** stream `HRIS_EVENTS` on subject `hris.>` (created in `services/audit-service/cmd/server/main.go`). Base envelope: `event_id`, `event_type`, `schema_version` (=1), `tenant_id`, `actor_id`, `occurred_at`, `payload`.
+**Current:** NATS JetStream was removed by ADR-0006; events now flow through the Dragonfly stream `hris:events` (`apps/api/cmd/api/main.go`) with publishers in `apps/api/services/<name>/infrastructure/` and consumers in `apps/api/services/notification/consumers.go` and `apps/api/services/audit/consumers.go`. The event table below is the pre-consolidation (NATS, ADR-0003) as-is; its subjects and defects are history until re-verified. Base envelope: `event_id`, `event_type`, `schema_version` (=1), `tenant_id`, `actor_id`, `occurred_at`, `payload`.
 
 | Subject / event type (as-is) | Producer | Existing consumers | Status | Evidence |
 |---|---|---|---|---|
@@ -296,7 +298,7 @@ The `auth-service` service has six RPCs and all six have real handlers (Evidence
 | ID | Requirement | Priority | Status | Evidence |
 |---|---|---|---|---|
 | FR-HRS-01.1 | A tenant registers itself (name, unique slug, first admin). In one atomic transaction the tenant, three system roles, built-in permissions, and an admin user with role `hr_admin` are created; events `tenant_registered` and `user_registered` are emitted via the outbox | M | Partial: handler and rules exist, but creation is not atomic and INSERT/UPDATE on `auth.tenants` is only granted to role `hris_admin`, so it fails under the default DSN `hris_app` (`Pending Verification`, not yet run) | `services/auth-service/internal/application/commands/register_tenant.go` |
-| FR-HRS-01.2 | Login with email + password; success issues an opaque session (HttpOnly Secure cookie) containing tenant, user, roles; wrong credentials do not distinguish "email does not exist" from "wrong password" | M | Partial: the `Login` handler exists and issues a JWT; the web uses a mock login to `localhost:3000` and `setSession` is never called | `services/auth-service/internal/application/commands/login.go`, `apps/web/src/routes/(auth)/login/+page.server.ts` |
+| FR-HRS-01.2 | Login with email + password; success issues an opaque session (HttpOnly Secure cookie) containing tenant, user, roles; wrong credentials do not distinguish "email does not exist" from "wrong password" | M | Partial: the `Login` handler exists and issues a JWT; the web login action calls the Go API and stores the token in the HttpOnly `hris_session` cookie (the mock to `localhost:3000` is resolved); the session is a JWT, not an opaque session | `apps/api/services/auth/application/commands/login.go`, `apps/web/src/routes/(auth)/login/+page.server.ts` |
 | FR-HRS-01.3 | Password policy: 8-128 characters with upper case, lower case, digit, symbol; bcrypt hash (hash scheme kept, D-HRS-06 and D10); tenant slug 3-50 characters `^[a-z0-9-]+$` | M | Done | `services/auth-service/internal/domain/user.go` |
 | FR-HRS-01.4 | Session lifecycle: issue, validate (introspection), extend, revoke/logout; expiry with TTL `tbd` (Q-HRS-11); only the session hash is stored in Dragonfly. As-is: JWT RS256 15 minutes + refresh 7 days (hardcoded), refresh and revocation list in Redis | M | Partial: refresh and revocation exist but without token-family reuse detection; TTL hardcoded in `cmd/server/main.go` line 81 | `services/auth-service/internal/application/commands/refresh_token.go`, `services/auth-service/internal/application/commands/revoke_token.go`, `services/auth-service/internal/infrastructure/jwt_signer.go` |
 | FR-HRS-01.5 | Account lockout after repeated failed attempts (threshold and duration `tbd`) and login rate limiting per address and per account | M | Not started: table `login_attempts` exists in the schema but is unused; no lockout code | `services/auth-service/migrations/001_create_auth_schema.up.sql` |
@@ -552,7 +554,7 @@ The following requirements apply across modules 4.01 to 4.08; the Requirement co
 | FR-HRS-SEC.3 | NIK, NPWP, birth date encrypted with `kit/piicrypt` with a blind index; old data encrypted during migration; plain `TEXT` columns removed | M | Not started | `services/employee-service/migrations/001_create_employee_schema.up.sql` |
 | FR-HRS-SEC.4 | Opaque session: HttpOnly Secure SameSite cookie, hash in Dragonfly, no JWT and no token in the browser; tenant and actor always from the session | M | Not started: JWT and cookie `auth_user` readable by the client | `services/auth-service/internal/infrastructure/jwt_signer.go`, `apps/web/src/lib/stores/auth.ts` |
 | FR-HRS-SEC.5 | Deny-by-default: interceptor/middleware rejects every route/RPC without an explicit permission; internal routes use an HMAC service token | M | Not started | `services/_shared/server/grpc_interceptors.go` |
-| FR-HRS-SEC.6 | Rate limiting of login and sensitive endpoints per address and per account with Dragonfly; threshold `tbd` | M | Not started | `apps/api-gateway/routes/api.php` |
+| FR-HRS-SEC.6 | Rate limiting of login and sensitive endpoints per address and per account with Dragonfly; threshold `tbd` | M | Not started | `apps/api/cmd/api/routes.go` |
 | FR-HRS-SEC.7 | No default secrets or credentials in code or tracked files; secrets from env with fail-fast validation; `.env.example`; secrets ever committed are rotated and purged from history | M | Partial: configuration from env exists but dev credentials are written in tracked files and default values are in code | `services/_shared/config/loader.go`, `deploy/docker/docker-compose.yml` |
 | FR-HRS-SEC.8 | Data subject rights: HR can export/correct/delete one employee's data on request, recorded in audit; processing basis and consent recorded | S | Not started | `services/employee-service/internal/interfaces/grpc/employee_service.go` |
 | FR-HRS-SEC.9 | Web security headers (CSP, `X-Content-Type-Options`, HSTS, `Referrer-Policy`), strict CORS, CSRF protection for the session cookie | S | Not started | `apps/web/svelte.config.js` |
@@ -767,7 +769,7 @@ This section translates NFR-HRS (defined in `PRD_HRIS.id.md` section 6) into tec
 | NFR-HRS-05 | Append-only `audit_logs` with a trigger rejecting UPDATE/DELETE/TRUNCATE (FR-HRS-06.4) | an integration test that attempts UPDATE/DELETE must fail | Partial | `services/audit-service/migrations/001_create_audit_schema.up.sql` |
 | NFR-HRS-06 | Availability target `tbd`; `/healthz`; automatic restart by the process manager | monitoring; no hosting target yet (Q-HRS-12) | Not started | `docker-compose.production.yml` |
 | NFR-HRS-07 | p95 latency `tbd`; indexes matching query patterns; pagination mandatory | load test on the real stack (none yet) | Not started | `services/leave-service/migrations/002_add_performance_indexes.up.sql` |
-| NFR-HRS-08 | Dragonfly rate limiter (Lua script) per address/account and route class; account lockout (FR-HRS-01.5, FR-HRS-SEC.6) | integration test: N failed attempts yield 429 | Not started | `apps/api-gateway/routes/api.php` |
+| NFR-HRS-08 | Dragonfly rate limiter (Lua script) per address/account and route class; account lockout (FR-HRS-01.5, FR-HRS-SEC.6) | integration test: N failed attempts yield 429 | Not started | `apps/api/cmd/api/routes.go` |
 | NFR-HRS-09 | Reversible goose migrations; CI job `up -> down -> up` for **all** modules on a fresh DB | green CI job | Partial: CI runs `up -> down -> up` only for auth, employee, leave with golang-migrate; attendance, audit, notification, document are not covered, and the attendance migration is invalid | `.github/workflows/ci-go.yml` |
 | NFR-HRS-10 | `scripts/check.sh` like SELA; coverage >= 80%; `-race` | green CI; coverage threshold | Partial: Go CI uses `-race`, but CI `GO_VERSION` is 1.24 while `go.work` is 1.25.0; no coverage threshold; document-service has no test files | `.github/workflows/ci-go.yml`, `go.work` |
 | NFR-HRS-11 | `slog` JSON without PII, `/healthz`; OTel/Prometheus optional (Q-HRS-08) | test that logs contain no PII; green `/healthz` | Partial: OTel `InitTracer` and `NewMetricsRegistry` are defined in `_shared` but never called by services; `StartMetricsServer` binds `:8081` for all services | `services/_shared/observability/otel.go`, `services/_shared/observability/metrics.go` |
@@ -788,7 +790,7 @@ This section translates NFR-HRS (defined in `PRD_HRIS.id.md` section 6) into tec
 | Web route | Function | Status | Evidence |
 |---|---|---|---|
 | `/` | landing page | Partial | `apps/web/src/routes/+page.svelte` |
-| `/login` | login form; the server action calls `http://localhost:3000/api/auth/login` (hard-coded value, not a real backend); after success it sets cookies `auth_token` (HttpOnly) and `auth_user` (not HttpOnly) | Partial | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/routes/(auth)/login/+page.svelte` |
+| `/login` | login form; the server action posts to the Go API `/api/v1/auth/login` and sets the HttpOnly cookie `hris_session` (token and roles) through the session store | Partial | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/server/session.ts` |
 | `/dashboard` | user dashboard | Partial | `apps/web/src/routes/(app)/dashboard/+page.svelte` |
 | `/leaves/apply` | leave request form | Partial | `apps/web/src/routes/(app)/leaves/apply/+page.svelte` |
 | `/admin/leaves` | leave approval queue for managers/HR; role protection in the server hook reads the role from the `auth_user` cookie | Partial | `apps/web/src/routes/(app)/admin/leaves/+page.svelte`, `apps/web/src/hooks.server.ts` |
@@ -829,7 +831,7 @@ Concise reference; the full definition of each FR is in sections 4 and 8.4.
 | FR | Status | Main gap | Evidence |
 |---|---|---|---|
 | FR-HRS-01.1 | Partial | not atomic; `auth.tenants` rights only `hris_admin` | `services/auth-service/internal/application/commands/register_tenant.go` |
-| FR-HRS-01.2 | Partial | web uses a mock login; JWT is not an opaque session | `services/auth-service/internal/application/commands/login.go` |
+| FR-HRS-01.2 | Partial | web login now calls the Go API (mock resolved); JWT is not an opaque session | `apps/api/services/auth/application/commands/login.go` |
 | FR-HRS-01.3 | Done | - | `services/auth-service/internal/domain/user.go` |
 | FR-HRS-01.4 | Partial | no reuse detection; hardcoded TTL | `services/auth-service/internal/application/commands/refresh_token.go` |
 | FR-HRS-01.5 | Not started | `login_attempts` unused | `services/auth-service/migrations/001_create_auth_schema.up.sql` |
@@ -897,7 +899,7 @@ Concise reference; the full definition of each FR is in sections 4 and 8.4.
 | FR-HRS-SEC.3 | Not started | plain PII | `services/employee-service/migrations/001_create_employee_schema.up.sql` |
 | FR-HRS-SEC.4 | Not started | JWT | `services/auth-service/internal/infrastructure/jwt_signer.go` |
 | FR-HRS-SEC.5 | Not started | no authn/authz | `services/_shared/server/grpc_interceptors.go` |
-| FR-HRS-SEC.6 | Not started | `throttle` not applied | `apps/api-gateway/routes/api.php` |
+| FR-HRS-SEC.6 | Not started | no rate limiter wired in `cmd/api` | `apps/api/cmd/api/routes.go` |
 | FR-HRS-SEC.7 | Partial | dev credentials tracked | `deploy/docker/docker-compose.yml` |
 | FR-HRS-SEC.8 | Not started | - | `services/employee-service/internal/interfaces/grpc/employee_service.go` |
 | FR-HRS-SEC.9 | Not started | - | `apps/web/svelte.config.js` |
@@ -945,9 +947,9 @@ This section records claims of status documents, ADRs, and `CLAUDE.md` that **co
 |---|---|---|
 | Attendance migration 001 is invalid | Line 25 `CONSTRAINT attendance_unique_per_day UNIQUE (tenant_id, employee_id, date) WHERE NOT is_override` is not valid PostgreSQL syntax (the `WHERE` clause is only for unique indexes). Lines 45-46 `GRANT ... TO app` use role `app`, not `hris_app`; the init script only creates `hris_app` and `hris_admin`. RLS `ENABLE` without `FORCE` and policy without `WITH CHECK`. Role `app` is also used by the leave and notification migrations. | `services/attendance-service/migrations/001_create_attendance_schema.up.sql`, `deploy/docker/init-postgres.sql` |
 | Duplicate indexes | Attendance 002 (`idx_attendance_employee_date`) and leave 002 (`idx_leave_requests_employee_id`, `_status`, `_approved_by`) create indexes with the same name as migration 001 without `IF NOT EXISTS` (`Pending Verification`, not yet run) | `services/attendance-service/migrations/002_add_performance_indexes.up.sql`, `services/leave-service/migrations/002_add_performance_indexes.up.sql` |
-| No HTTP mux is mounted | There is no `runtime.NewServeMux` or `ListenAndServe` in `services/**` outside `*.pb.gw.go` files. The grpc-gateway HTTP path called by the Laravel gateway is never served; ADR-0001 states the gateway runs in each service. The only HTTP that exists is the metrics server `:8081` (`StartMetricsServer`). The `*.pb.gw.go` files are in `gen/go`, which is ignored by git. | `services/auth-service/cmd/server/main.go`, `services/_shared/observability/metrics.go`, `docs/adr/0001-grpc-gateway-over-grpc-php.md` |
-| The web login is a mock | `apps/web/src/routes/(auth)/login/+page.server.ts` lines 38-40 call `http://localhost:3000/api/auth/login`, not the gateway/services; `setSession` in `src/lib/stores/auth.ts` line 58 has no caller | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/stores/auth.ts` |
-| The gateway client does not pass the token | `getBearerToken()` returns an empty string; `AuthServiceClient` calls the real gRPC path `/hris.auth.v1.AuthService/Login`, not `/v1/auth/login` | `apps/api-gateway/app/Services/BaseGrpcGatewayClient.php`, `apps/api-gateway/app/Services/AuthServiceClient.php` |
+| No HTTP mux is mounted (resolved 2026-11-14) | Was: no `runtime.NewServeMux` or `ListenAndServe` in the standalone services; the grpc-gateway path called by the Laravel gateway was never served. ADR-0005 removed the gateway, gRPC and grpc-gateway; `cmd/api` now serves REST on one `net/http` ServeMux | `apps/api/cmd/api/routes.go`, `apps/api/cmd/api/main.go`, `docs/adr/0005-single-module-go-api-on-sela-stack.md` |
+| The web login is a mock (resolved 2026-11-14) | `apps/web/src/routes/(auth)/login/+page.server.ts` now posts to `${apiUrl()}/api/v1/auth/login` and writes the `hris_session` cookie via `session.write`; the `localhost:3000` call and the unused `setSession` store function are gone | `apps/web/src/routes/(auth)/login/+page.server.ts`, `apps/web/src/lib/server/session.ts` |
+| The gateway client does not pass the token (resolved 2026-11-14) | Was: `getBearerToken()` returned an empty string in the Laravel gateway client. The gateway was removed (ADR-0005); the SvelteKit BFF proxy now attaches the bearer token from the `hris_session` cookie | `apps/web/src/routes/api/[...path]/+server.ts`, `docs/adr/0005-single-module-go-api-on-sela-stack.md` |
 | Documents: empty RPCs | `GetPresignedUrl`, `RollbackDocumentVersion` are empty (`document_service.go` lines 215-221) and `DownloadDocument` is also a placeholder; `UploadDocument` always returns `Unauthenticated` because `actor_id` is never filled | `services/document-service/internal/interfaces/grpc/document_service.go`, `services/document-service/internal/interfaces/grpc/mapping.go` |
 | Notifications are not delivered | `cmd/server/main.go` lines 112-132 set `_ = emailAdapter` and `_ = inAppAdapter` | `services/notification-service/cmd/server/main.go` |
 | Empty event payloads | Leave events carry private fields without `MarshalJSON`, so `payload` is `{}`; `ApplyLeave` does not fill `DaysCount` | `services/leave-service/internal/infrastructure/nats/event_publisher.go`, `services/leave-service/internal/domain/events.go` |

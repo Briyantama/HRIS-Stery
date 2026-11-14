@@ -11,7 +11,7 @@ Phase 1 services: auth, employee, attendance, leave, notification, audit, docume
 ## Layout
 
 ```
-apps/api/                     one Go module github.com/Briyantama/HRIS-Stery (Go 1.25.1)
+apps/api/                     one Go module github.com/Briyantama/HRIS-Stery (Go 1.27.3)
   cmd/api/                    HTTP server: main.go (run(ctx, getenv)), routes.go (newMux)
   cmd/migrate/                goose up|down, reads DATABASE_URL
   internal/config/            Load(getenv) with fail-fast validation

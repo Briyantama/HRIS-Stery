@@ -1,3 +1,5 @@
+> **Superseded (2026-11-14).** Written 2026-06 against the pre-consolidation multi-service layout. Current state: docs/FSD_HRIS.en.md, docs/adr/0005 and 0006, docs/aidlc/intents/261108-stack-align-sela/. Kept for history only.
+
 # PHASE 5: Deep Code-Level Architecture Review
 
 **Date:** 2026-06-08  
