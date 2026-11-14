@@ -1,0 +1,113 @@
+# Production-like stack for HRIS-Stery. Every secret comes from the environment or .env; nothing is hardcoded.
+# Build from the stery-suite parent so the API image sees stery-kit/go.
+name: hris-prod
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    # PostgreSQL 18 async I/O. io_uring needs seccomp=unconfined, which is not worth it here, so use worker.
+    # Measured on a laptop (cold cache): bitmap scans ~2x, seq scans ~1.3x, no effect on index/point queries.
+    command: ["postgres", "-c", "io_method=worker", "-c", "io_workers=16", "-c", "effective_io_concurrency=32"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # Password for the RLS-bound hris_app role; set it in .env. deploy/docker/init-postgres.sh passes it
+      # to the .sql as a psql variable (init runs once, on an empty volume), so it is never committed.
+      HRIS_APP_PASSWORD: ${HRIS_APP_PASSWORD:?}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./deploy/docker/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh:ro
+      # Outside initdb.d so the entrypoint does not run the raw .sql itself.
+      - ./deploy/docker/init-postgres.sql:/opt/init-postgres.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    command: ["--requirepass=${REDIS_PASSWORD:?}"]
+    ulimits:
+      memlock: -1
+    volumes:
+      - dragonfly_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?}
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket ${S3_BUCKET:?}
+        || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket ${S3_BUCKET:?}
+
+  # Schema migrations run as the owner/superuser; the api itself connects as the RLS-bound hris_app role.
+  migrate:
+    build:
+      context: ..
+      dockerfile: HRIS-Stery/apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: HRIS-Stery/apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      PORT: "8000"
+      DATABASE_URL: postgres://hris_app:${HRIS_APP_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      REDIS_ADDR: dragonfly:6379
+      S3_ENDPOINT: http://rustfs:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?}
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  dragonfly_data:
+  rustfs_data:

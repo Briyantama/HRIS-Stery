@@ -1,0 +1,49 @@
+{
+  "name": "hris-stery-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^20.19.43",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "eslint": "^9.17.0",
+    "eslint-plugin-svelte": "^3.24.1",
+    "globals": "^15.14.0",
+    "@lucide/svelte": "^1.70.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-svelte": "^3.3.2",
+    "svelte": "^5.56.1",
+    "svelte-check": "^4.6.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.11",
+    "@eslint/js": "^9.39.1"
+  },
+  "dependencies": {
+    "@stery/kit": "file:../../../stery-kit/web",
+    "@tanstack/svelte-query": "^5.62.8",
+    "zod": "^3.24.1"
+  }
+}

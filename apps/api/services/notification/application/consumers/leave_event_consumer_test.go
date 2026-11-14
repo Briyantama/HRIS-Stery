@@ -1,0 +1,202 @@
+package consumers
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/Briyantama/HRIS-Stery/services/notification/application/commands"
+	"github.com/Briyantama/HRIS-Stery/services/notification/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"uuid"
+)
+
+// MockSendNotificationHandler for testing
+type MockSendNotificationHandler struct {
+	handledCommands []commands.SendNotificationCommand
+}
+
+func (m *MockSendNotificationHandler) Handle(ctx context.Context, cmd commands.SendNotificationCommand) (*commands.SendNotificationResult, error) {
+	m.handledCommands = append(m.handledCommands, cmd)
+	return &commands.SendNotificationResult{
+		NotificationIDs: []string{uuid.NewV7().String()},
+	}, nil
+}
+
+// MockChannelConfigRepository for testing
+type MockChannelConfigRepository struct {
+	configs map[string]*domain.NotificationChannelConfig
+}
+
+func (m *MockChannelConfigRepository) Create(ctx context.Context, config *domain.NotificationChannelConfig) error {
+	m.configs[config.TenantID().String()] = config
+	return nil
+}
+
+func (m *MockChannelConfigRepository) GetByTenant(ctx context.Context, tenantID domain.TenantID) (*domain.NotificationChannelConfig, error) {
+	return m.configs[tenantID.String()], nil
+}
+
+func (m *MockChannelConfigRepository) Update(ctx context.Context, config *domain.NotificationChannelConfig) error {
+	m.configs[config.TenantID().String()] = config
+	return nil
+}
+
+func TestLeaveEventConsumer_ConsumeLeaveRequested(t *testing.T) {
+	// Setup
+	mockSendHandler := &MockSendNotificationHandler{}
+	mockConfigRepo := &MockChannelConfigRepository{
+		configs: make(map[string]*domain.NotificationChannelConfig),
+	}
+
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
+	emailConfig := &domain.EmailConfig{
+		SMTPHost:    "smtp.example.com",
+		SMTPPort:    587,
+		FromAddress: "noreply@example.com",
+		FromName:    "HRIS",
+	}
+	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeEmail}, emailConfig)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
+
+	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
+
+	// Create event
+	event := &domain.LeaveRequestedEvent{
+		EventID:    uuid.NewV7().String(),
+		TenantID:   tenantID,
+		ActorID:    uuid.NewV7().String(),
+		OccurredAt: time.Now(),
+		EmployeeID: uuid.NewV7().String(),
+		LeaveType:  "Annual Leave",
+		StartDate:  "2026-06-15",
+		EndDate:    "2026-06-20",
+		ApproverId: uuid.NewV7().String(),
+	}
+
+	// Act
+	err := consumer.ConsumeLeaveRequested(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(mockSendHandler.handledCommands))
+	assert.Equal(t, "leave.requested", mockSendHandler.handledCommands[0].TemplateKey)
+	assert.Equal(t, event.ApproverId, mockSendHandler.handledCommands[0].RecipientID)
+}
+
+func TestLeaveEventConsumer_ConsumeLeaveApproved(t *testing.T) {
+	// Setup
+	mockSendHandler := &MockSendNotificationHandler{}
+	mockConfigRepo := &MockChannelConfigRepository{
+		configs: make(map[string]*domain.NotificationChannelConfig),
+	}
+
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
+	emailConfig := &domain.EmailConfig{
+		SMTPHost:    "smtp.example.com",
+		SMTPPort:    587,
+		FromAddress: "noreply@example.com",
+		FromName:    "HRIS",
+	}
+	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeInApp}, emailConfig)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
+
+	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
+
+	// Create event
+	employeeID := uuid.NewV7().String()
+	event := &domain.LeaveApprovedEvent{
+		EventID:    uuid.NewV7().String(),
+		TenantID:   tenantID,
+		ActorID:    uuid.NewV7().String(),
+		OccurredAt: time.Now(),
+		EmployeeID: employeeID,
+		LeaveType:  "Annual Leave",
+		StartDate:  "2026-06-15",
+		EndDate:    "2026-06-20",
+		ApproverId: uuid.NewV7().String(),
+	}
+
+	// Act
+	err := consumer.ConsumeLeaveApproved(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(mockSendHandler.handledCommands))
+	assert.Equal(t, "leave.approved", mockSendHandler.handledCommands[0].TemplateKey)
+	assert.Equal(t, employeeID, mockSendHandler.handledCommands[0].RecipientID)
+}
+
+func TestLeaveEventConsumer_ConsumeLeaveRejected(t *testing.T) {
+	// Setup
+	mockSendHandler := &MockSendNotificationHandler{}
+	mockConfigRepo := &MockChannelConfigRepository{
+		configs: make(map[string]*domain.NotificationChannelConfig),
+	}
+
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
+	emailConfig := &domain.EmailConfig{
+		SMTPHost:    "smtp.example.com",
+		SMTPPort:    587,
+		FromAddress: "noreply@example.com",
+		FromName:    "HRIS",
+	}
+	config, _ := domain.NewNotificationChannelConfig(tenantID, []domain.ChannelType{domain.ChannelTypeEmail}, emailConfig)
+	require.NoError(t, mockConfigRepo.Create(context.Background(), config))
+
+	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
+
+	// Create event
+	employeeID := uuid.NewV7().String()
+	event := &domain.LeaveRejectedEvent{
+		EventID:    uuid.NewV7().String(),
+		TenantID:   tenantID,
+		ActorID:    uuid.NewV7().String(),
+		OccurredAt: time.Now(),
+		EmployeeID: employeeID,
+		LeaveType:  "Annual Leave",
+		StartDate:  "2026-06-15",
+		EndDate:    "2026-06-20",
+		Reason:     "Insufficient headcount",
+	}
+
+	// Act
+	err := consumer.ConsumeLeaveRejected(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(mockSendHandler.handledCommands))
+	assert.Equal(t, "leave.rejected", mockSendHandler.handledCommands[0].TemplateKey)
+	assert.Equal(t, employeeID, mockSendHandler.handledCommands[0].RecipientID)
+}
+
+func TestLeaveEventConsumer_NoConfigSkipsNotification(t *testing.T) {
+	// Setup - no config in repo
+	mockSendHandler := &MockSendNotificationHandler{}
+	mockConfigRepo := &MockChannelConfigRepository{
+		configs: make(map[string]*domain.NotificationChannelConfig),
+	}
+
+	consumer := NewLeaveEventConsumer(mockSendHandler, mockConfigRepo)
+
+	tenantID := domain.MustNewTenantID(uuid.NewV7().String())
+	event := &domain.LeaveRequestedEvent{
+		EventID:    uuid.NewV7().String(),
+		TenantID:   tenantID,
+		ActorID:    uuid.NewV7().String(),
+		OccurredAt: time.Now(),
+		EmployeeID: uuid.NewV7().String(),
+		LeaveType:  "Annual Leave",
+		StartDate:  "2026-06-15",
+		EndDate:    "2026-06-20",
+		ApproverId: uuid.NewV7().String(),
+	}
+
+	// Act
+	err := consumer.ConsumeLeaveRequested(context.Background(), event)
+
+	// Assert - should not error, but should not send
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(mockSendHandler.handledCommands))
+}
