@@ -182,7 +182,7 @@
 					<Label for="leave-type">Leave Type *</Label>
 
 					{#if $leaveTypes.isLoading}
-						<div class="h-10 rounded-lg border border-input bg-muted"></div>
+						<div class="h-10 rounded-lg border border-input bg-muted" aria-busy="true"></div>
 					{:else if $leaveTypes.isError}
 						<Alert tone="destructive">
 							Failed to load leave types: {$leaveTypes.error?.message || 'Unknown error'}
@@ -239,12 +239,12 @@
 				</div>
 
 				<!-- Days Count Display -->
-				{#if formData.start_date && formData.end_date}
+				{#if formData.start_date && formData.end_date && formData.end_date >= formData.start_date}
 					{@const daysCount = Math.ceil(
 						(new Date(formData.end_date).getTime() - new Date(formData.start_date).getTime()) /
 							(1000 * 60 * 60 * 24)
 					) + 1}
-					<div class="rounded-lg border border-info/40 bg-info/10 p-3">
+					<div role="status" class="rounded-lg border border-info/40 bg-info/10 p-3">
 						<p class="text-sm font-medium text-foreground">
 							Total Leave Days: <span class="text-lg font-bold">{daysCount}</span>
 						</p>
@@ -271,7 +271,7 @@
 					<Button
 						type="submit"
 						disabled={!isFormValid() || $applyLeave.isPending}
-						class="flex-1"
+						class="flex-1 max-md:min-h-11"
 					>
 						{$applyLeave.isPending ? 'Submitting...' : 'Submit Request'}
 					</Button>
@@ -281,6 +281,7 @@
 						variant="outline"
 						onclick={() => goto(resolve('/dashboard'))}
 						disabled={$applyLeave.isPending}
+						class="max-md:min-h-11"
 					>
 						Cancel
 					</Button>

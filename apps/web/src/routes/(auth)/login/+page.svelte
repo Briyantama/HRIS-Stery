@@ -12,7 +12,7 @@
 	<div class="max-w-md w-full space-y-8">
 		<!-- Header -->
 		<div class="text-center">
-			<h2 class="mt-6 text-3xl font-bold text-foreground">Sign in to HRIS</h2>
+			<h1 class="mt-6 text-3xl font-bold text-foreground">Sign in to HRIS</h1>
 			<p class="mt-2 text-sm text-muted-foreground">Multi-tenant HR Management System</p>
 		</div>
 
@@ -67,6 +67,7 @@
 					id="email"
 					type="email"
 					name="email"
+					autocomplete="username"
 					required
 					placeholder="you@example.com"
 					disabled={loading}
@@ -81,6 +82,7 @@
 					id="password"
 					type="password"
 					name="password"
+					autocomplete="current-password"
 					required
 					placeholder="••••••••"
 					disabled={loading}

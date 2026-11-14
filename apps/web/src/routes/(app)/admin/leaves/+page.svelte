@@ -18,11 +18,15 @@
 		DialogFooter,
 		DialogHeader,
 		DialogTitle,
+		ConfirmDialog,
 		Label,
+		Pagination,
 		Skeleton,
-		Textarea
+		Textarea,
+		Toaster,
+		toast
 	} from '@stery/kit/ui';
-	import { CircleAlert, CircleCheck, X } from '@lucide/svelte';
+	import { CircleAlert } from '@lucide/svelte';
 
 	// Mutations
 	const approveLeave = useApproveLeave();
@@ -38,37 +42,56 @@
 	// Status filter
 	let statusFilter: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
 
-	// Fetch leave requests based on status filter
-	const filters = writable<{ status: string }>({ status: statusFilter });
-	$: filters.set({ status: statusFilter });
+	// Fetch leave requests based on status filter and page
+	let pageNo = 1;
+	const filters = writable<{ status: string; page: number }>({ status: statusFilter, page: pageNo });
+	$: filters.set({ status: statusFilter, page: pageNo });
 	const leaveRequests = useLeaveRequests(filters);
 
-	// Toast state
-	let showSuccessToast = false;
-	let successMessage = '';
+	function selectStatus(status: typeof statusFilter) {
+		statusFilter = status;
+		pageNo = 1;
+	}
+
+	// Approve confirmation: which request, and which row is spinning (per row, not shared)
+	let showApproveModal = false;
+	let pendingApproveId: string | null = null;
+	let approvingId: string | null = null;
 
 	/**
 	 * Handle approve action with confirmation
 	 */
-	async function handleApprove(leaveId: string) {
-		if (!confirm('Are you sure you want to approve this leave request?')) {
-			return;
-		}
+	function openApproveModal(leaveId: string) {
+		pendingApproveId = leaveId;
+		showApproveModal = true;
+	}
+
+	/**
+	 * Approve the leave request chosen in the confirmation dialog
+	 */
+	async function handleApproveConfirm() {
+		const leaveId = pendingApproveId;
+		if (!leaveId) return;
+		approvingId = leaveId;
 
 		try {
 			await $approveLeave.mutateAsync(leaveId);
-			showSuccessToast = true;
-			successMessage = 'Leave request approved successfully!';
-			setTimeout(() => {
-				showSuccessToast = false;
-			}, 3000);
-
-			// Refetch data
-			$leaveRequests.refetch();
+			toast.success('Leave request approved successfully!');
+			refetchAfterRemoval();
 		} catch (error) {
 			console.error('Approval failed:', error);
-			alert(getErrorMessage(error));
+			toast.error(getErrorMessage(error));
+		} finally {
+			approvingId = null;
 		}
+	}
+
+	/**
+	 * Refetch after an approve/reject; step back a page when the last row of a later page is gone
+	 */
+	function refetchAfterRemoval() {
+		if ($leaveRequests.data?.items.length === 1 && pageNo > 1) pageNo -= 1;
+		else $leaveRequests.refetch();
 	}
 
 	/**
@@ -111,18 +134,14 @@
 				reason: rejectReason
 			});
 
-			showSuccessToast = true;
-			successMessage = 'Leave request rejected successfully!';
-			setTimeout(() => {
-				showSuccessToast = false;
-			}, 3000);
+			toast.success('Leave request rejected successfully!');
 
 			showRejectModal = false;
 			selectedLeaveId = null;
 			rejectReason = '';
 
 			// Refetch data
-			$leaveRequests.refetch();
+			refetchAfterRemoval();
 		} catch (error) {
 			rejectGeneralError = getErrorMessage(error);
 		}
@@ -196,16 +215,7 @@
 			<p class="mt-2 text-muted-foreground">Review and manage pending leave requests for your team</p>
 		</div>
 
-		<!-- Success Toast -->
-		{#if showSuccessToast}
-			<div class="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-lg border border-success/40 bg-surface p-4 shadow-lg">
-				<CircleCheck class="h-5 w-5 text-success" />
-				<p class="text-sm font-medium text-foreground">{successMessage}</p>
-				<button on:click={() => (showSuccessToast = false)} class="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
-					<X class="h-4 w-4" />
-				</button>
-			</div>
-		{/if}
+		<Toaster />
 
 		<!-- Status Filter Tabs -->
 		<div class="flex gap-2 border-b border-border">
@@ -215,8 +225,10 @@
 				{ label: 'Rejected', value: 'REJECTED' as const }
 			] as tab (tab.value)}
 				<button
-					on:click={() => (statusFilter = tab.value)}
-					class={`px-4 py-2 font-medium transition-colors ${
+					type="button"
+					aria-pressed={statusFilter === tab.value}
+					on:click={() => selectStatus(tab.value)}
+					class={`min-h-11 px-4 py-2 font-medium transition-colors ${
 						statusFilter === tab.value
 							? 'border-b-2 border-primary text-primary'
 							: 'text-muted-foreground hover:text-foreground'
@@ -262,7 +274,7 @@
 							<div class="mb-4 flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
 								<div>
 									<div class="flex items-center gap-3">
-										<h3 class="font-semibold text-foreground">{leave.reason || 'Leave Request'}</h3>
+										<h2 class="font-semibold text-foreground">{leave.reason || 'Leave Request'}</h2>
 										<Badge tone={getStatusTone(leave.status)} class="rounded-full px-3 py-1">
 											{leave.status}
 										</Badge>
@@ -305,7 +317,7 @@
 									{:else if leave.status === 'REJECTED' && leave.rejection_reason}
 										<p class="mt-1 text-xs text-muted-foreground">{leave.rejection_reason}</p>
 									{:else if leave.status === 'PENDING'}
-										<p class="mt-1 text-xs text-warning">Awaiting approval</p>
+										<p class="mt-1 text-xs text-muted-foreground">Awaiting approval</p>
 									{:else}
 										<p class="mt-1 text-xs text-muted-foreground">—</p>
 									{/if}
@@ -317,9 +329,9 @@
 										<Button
 											size="sm"
 											variant="primary"
-											onclick={() => handleApprove(leave.id)}
-											loading={$approveLeave.isPending}
-											class="flex-1"
+											onclick={() => openApproveModal(leave.id)}
+											loading={approvingId === leave.id}
+											class="flex-1 max-md:min-h-11"
 										>
 											Approve
 										</Button>
@@ -327,7 +339,7 @@
 											size="sm"
 											variant="destructive"
 											onclick={() => openRejectModal(leave.id)}
-											loading={$rejectLeave.isPending}
+											class="max-md:min-h-11"
 										>
 											Reject
 										</Button>
@@ -347,14 +359,31 @@
 				{/each}
 			</div>
 
-			<!-- Pagination Info -->
+			<!-- Pagination -->
 			{#if $leaveRequests.data.total > 0}
-				<div class="text-center text-sm text-muted-foreground">
-					Showing {$leaveRequests.data.items.length} of {$leaveRequests.data.total} requests
+				<div class="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+					<p>Showing {$leaveRequests.data.items.length} of {$leaveRequests.data.total} requests</p>
+					{#if $leaveRequests.data.total > $leaveRequests.data.per_page}
+						<Pagination
+							page={pageNo}
+							total={$leaveRequests.data.total}
+							perPage={$leaveRequests.data.per_page}
+							onchange={(p) => (pageNo = p)}
+						/>
+					{/if}
 				</div>
 			{/if}
 		{/if}
 	</div>
+
+	<!-- Approve confirmation -->
+	<ConfirmDialog
+		bind:open={showApproveModal}
+		title="Approve Leave Request"
+		description="Are you sure you want to approve this leave request?"
+		confirmLabel="Approve"
+		onconfirm={handleApproveConfirm}
+	/>
 
 	<!-- Rejection Modal -->
 	<Dialog bind:open={showRejectModal}>

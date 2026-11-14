@@ -13,9 +13,17 @@
 	// Get badge color based on remaining days
 	function getRemainingDaysColor(remaining: number, entitled: number): string {
 		const percentage = entitled > 0 ? (remaining / entitled) * 100 : 0;
-		if (percentage > 50) return 'bg-success/15 text-success';
-		if (percentage > 25) return 'bg-warning/15 text-warning';
-		return 'bg-destructive/10 text-destructive';
+		if (percentage > 50) return 'border border-success/40 bg-success/15 text-foreground';
+		if (percentage > 25) return 'border border-warning/50 bg-warning/15 text-foreground';
+		return 'border border-destructive/40 bg-destructive/10 text-foreground';
+	}
+
+	// Used and pending as separate segments so the bar matches the legend (primary = used, warning = pending).
+	function usageSegments(used: number, pending: number, entitled: number): [number, number] {
+		if (entitled <= 0) return [0, 0];
+		const usedPct = Math.min(100, (used / entitled) * 100);
+		const pendingPct = Math.min(100 - usedPct, (pending / entitled) * 100);
+		return [usedPct, pendingPct];
 	}
 </script>
 
@@ -65,6 +73,7 @@
 		{#if balance.by_type.length > 0}
 			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 				{#each balance.by_type as typeBalance (typeBalance.leave_type_id)}
+					{@const seg = usageSegments(typeBalance.used_days, typeBalance.pending_days, typeBalance.entitled_days)}
 					<Card>
 						<CardHeader class="pb-3">
 							<CardTitle class="text-base">{typeById.get(typeBalance.leave_type_id)?.name ?? 'Leave'}</CardTitle>
@@ -74,18 +83,18 @@
 							<!-- Entitled Days -->
 							<div>
 								<p class="text-xs font-medium text-muted-foreground uppercase">Entitled</p>
-								<p class="mt-1 text-2xl font-bold">{typeBalance.entitled_days}</p>
+								<p class="mt-1 text-2xl font-bold tabular-nums">{typeBalance.entitled_days}</p>
 							</div>
 
 							<!-- Usage Breakdown -->
 							<div class="space-y-2 border-t pt-3">
 								<div class="flex justify-between text-sm">
 									<span class="text-muted-foreground">Used</span>
-									<span class="font-medium">{typeBalance.used_days}</span>
+									<span class="font-medium tabular-nums">{typeBalance.used_days}</span>
 								</div>
 								<div class="flex justify-between text-sm">
 									<span class="text-muted-foreground">Pending</span>
-									<span class="font-medium text-warning">{typeBalance.pending_days}</span>
+									<span class="font-medium tabular-nums">{typeBalance.pending_days}</span>
 								</div>
 							</div>
 
@@ -97,24 +106,17 @@
 								)}`}
 							>
 								<p class="text-xs font-medium opacity-75">Remaining</p>
-								<p class="text-lg">{typeBalance.remaining_days}</p>
+								<p class="text-lg tabular-nums">{typeBalance.remaining_days}</p>
 							</div>
 
 							<!-- Progress Bar -->
 							<div class="space-y-1">
 								<p class="text-xs text-muted-foreground">Usage</p>
-								<div class="h-2 overflow-hidden rounded-full bg-muted">
-									<div
-										class="h-full bg-primary transition-all"
-										style="width: {typeBalance.entitled_days > 0
-											? Math.min(
-													100,
-													((typeBalance.used_days + typeBalance.pending_days) / typeBalance.entitled_days) * 100
-												)
-											: 0}%"
-									></div>
+								<div class="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+									<div class="h-full bg-primary transition-all" style="width: {seg[0]}%"></div>
+									<div class="h-full bg-warning transition-all" style="width: {seg[1]}%"></div>
 								</div>
-								<p class="text-right text-xs text-muted-foreground">
+								<p class="text-right text-xs tabular-nums text-muted-foreground">
 									{typeBalance.used_days + typeBalance.pending_days} / {typeBalance.entitled_days}
 								</p>
 							</div>
@@ -138,7 +140,7 @@
 				</div>
 				<div class="flex items-center gap-2">
 					<span class="inline-block h-3 w-3 rounded bg-warning"></span>
-					<span><strong>Pending:</strong> Approved requests awaiting start date</span>
+					<span><strong>Pending:</strong> Requests awaiting approval</span>
 				</div>
 				<div class="flex items-center gap-2">
 					<span class="inline-block h-3 w-3 rounded border border-border bg-surface"></span>
