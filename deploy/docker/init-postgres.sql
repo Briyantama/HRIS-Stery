@@ -1,18 +1,19 @@
 -- ============================================================
 -- PostgreSQL cluster bootstrap
--- Run once by the hris_admin superuser via docker-entrypoint-initdb.d
+-- Run once as the superuser by deploy/docker/init-postgres.sh (docker-entrypoint-initdb.d),
+-- which passes the app password as the psql variable :app_password.
+-- Manual run: psql -v app_password='...' -f init-postgres.sql
 -- ============================================================
 
 -- Application role (no BYPASSRLS — cannot see other tenants' data)
-CREATE ROLE hris_app WITH LOGIN PASSWORD 'hris_app_secret'
+CREATE ROLE hris_app WITH LOGIN PASSWORD :'app_password'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 
--- Admin role (BYPASSRLS — for migrations and backoffice only)
--- hris_admin was created as POSTGRES_USER — grant BYPASSRLS
-ALTER ROLE hris_admin BYPASSRLS;
+-- Owner/migration role (BYPASSRLS — migrations and backoffice only)
+ALTER ROLE :"POSTGRES_USER" BYPASSRLS;
 
 -- Grant connect on the database
-GRANT CONNECT ON DATABASE hris_db TO hris_app;
+GRANT CONNECT ON DATABASE :"POSTGRES_DB" TO hris_app;
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";   -- gen_random_uuid()

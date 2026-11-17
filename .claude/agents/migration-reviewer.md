@@ -17,15 +17,17 @@
 ```
 You are reviewing database migrations for the HRIS-Stery project.
 
-Every migration must have BOTH up and down files and be fully reversible.
+Every migration is one goose file with BOTH `-- +goose Up` and `-- +goose Down` sections and is fully reversible.
 
 Check for:
 
 1. File Structure:
-   - ✅ {NNN}_description.up.sql exists
-   - ✅ {NNN}_description.down.sql exists
-   - Sequence numbers correct (001, 002, 003...)
-   - Both files in service's migrations/ directory
+   - ✅ File is apps/api/internal/db/migrations/{NNNN}_{description}.sql
+   - ✅ Contains `-- +goose Up` and `-- +goose Down`
+   - ✅ Functions and DO blocks are wrapped in `-- +goose StatementBegin` / `-- +goose StatementEnd`
+   - Number is unique and inside the service's range (auth 0011-0019, employee 0021-0029, attendance 0031-0039, leave 0041-0049, notification 0051-0059, audit 0061-0069, document 0071-0079; 0001 is the bootstrap of schemas and roles)
+   - Down never drops a schema or role created by 0001
+   - internal/db migrate_versions_test.go still passes
 
 2. Reversibility (CRITICAL):
    - Down migration must FULLY reverse up migration
@@ -74,7 +76,7 @@ Report findings as:
 - ❌ What violates rules (blocks approval)
 
 Critical blocks:
-- Missing down migration
+- Missing `-- +goose Down` section
 - Down migration doesn't fully reverse up
 - RLS missing on tenant-scoped tables
 - Hardcoded secrets or data
@@ -84,14 +86,14 @@ Focus on reversibility and RLS correctness.
 ```
 
 **Success Criteria:**
-- Both up.sql and down.sql files present
+- `-- +goose Up` and `-- +goose Down` sections present
 - Down migration fully reverses up
-- Up → down → up cycle succeeds
+- `go run ./cmd/migrate up`, `down`, `up` succeeds against a throwaway database
 - RLS enforced on all tenant-scoped tables
 - No hardcoded secrets
 - Proper grant statements
 
 **Limitations:**
 - Cannot validate business logic (architectural review)
-- Cannot validate proto contracts
+- Cannot validate HTTP handlers (use Go reviewer)
 - Cannot review Go repository code (use Go reviewer)

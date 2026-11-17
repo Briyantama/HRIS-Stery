@@ -6,7 +6,7 @@
 
 ## Instructions
 
-1. Identify the domain/service being changed (e.g., employee-service, auth-service, leave-service)
+1. Identify the service package being changed (e.g., `services/employee`, `services/auth`, `services/leave`)
 2. Check if relevant ADR exists in `docs/adr/`
 3. If ADR exists:
    - Read the ADR
@@ -21,22 +21,22 @@
 - [ ] ADR document exists in docs/adr/
 - [ ] ADR covers the service/domain being modified
 - [ ] Proposed change aligns with ADR decisions
-- [ ] No conflicts with locked decisions (ADR-0001, ADR-0002, ADR-0003, ADR-0004)
+- [ ] No conflicts with in-force decisions (ADR-0002, ADR-0004, ADR-0005, ADR-0006)
 
-## Locked ADRs (Do Not Override)
+## In-force ADRs (Do Not Override)
 
-- ADR-0001: grpc-gateway over gRPC-PHP
-- ADR-0002: PostgreSQL RLS for tenant isolation
-- ADR-0003: NATS JetStream event backbone
+- ADR-0002: PostgreSQL RLS for tenant isolation (amended 2026-11-08)
 - ADR-0004: Defer payroll/recruitment/performance to Phase 2
+- ADR-0005: Single-module Go API on the SELA stack (supersedes ADR-0001)
+- ADR-0006: Dragonfly Streams replace the old event backbone (supersedes ADR-0003)
 
 ## Examples
 
 **Trigger:** "Add a new field to the Employee model"
-→ Read `docs/adr/employee-service.md` (if exists) to confirm domain design
+→ Read ADR-0005 for package layout and ADR-0002 for the RLS rules
 
 **Trigger:** "Implement leave request approval workflow"
-→ Check `docs/adr/leave-service.md` and ADR-0003 (event design)
+→ Read ADR-0006 (event design) and the leave package in `apps/api/services/leave`
 
 **Trigger:** "Add cross-service database query"
 → Check ADR-0002 and CLAUDE.md — this violates RLS and service boundaries

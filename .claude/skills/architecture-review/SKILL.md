@@ -1,6 +1,6 @@
 # Architecture Review Skill
 
-**Trigger:** Before implementing handlers, controllers, or repositories
+**Trigger:** Before implementing HTTP handlers or repositories
 
 **Purpose:** Enforce Clean Architecture boundaries — no business logic in I/O layers
 
@@ -11,9 +11,9 @@ Domain Layer (pure, no I/O)
   ↓ depends on
 Application Layer (use cases, business logic)
   ↓ depends on
-Infrastructure Layer (I/O: DB, cache, NATS)
+Infrastructure Layer (I/O: DB, cache, event stream)
   ↓ depends on
-Interface Layer (HTTP/gRPC/CLI, thin)
+http.go (HTTP adapter, thin)
 ```
 
 **Rule:** Code can only depend on layers below it. Never upward.
@@ -22,51 +22,37 @@ Interface Layer (HTTP/gRPC/CLI, thin)
 
 ### Go Services
 
-**❌ FORBIDDEN: Business logic in gRPC handlers**
+**❌ FORBIDDEN: Business logic in HTTP handlers**
 ```go
-func (h *EmployeeServiceServer) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
+func (h *HTTPHandler) createEmployee(w http.ResponseWriter, r *http.Request) {
     // ❌ Validation logic here
-    if req.Email == "" { return nil, status.Error(...) }
-    
+    if body.Email == "" { httpx.WriteError(w, 422, "email required"); return }
+
     // ❌ Calculation here
-    salary := req.BaseSalary * 1.13
-    
+    salary := body.BaseSalary * 1.13
+
     // ❌ DB queries here
-    db.Exec("INSERT INTO employees...")
+    h.pool.Exec(r.Context(), "INSERT INTO employees...")
 }
 ```
 
 **✅ CORRECT: Handler is thin, delegates to application layer**
 ```go
-func (h *EmployeeServiceServer) CreateEmployee(ctx context.Context, req *pb.CreateEmployeeRequest) (*pb.EmployeeResponse, error) {
-    result, err := h.createEmployeeHandler.Handle(ctx, commands.CreateEmployeeCommand{
-        TenantID: req.TenantId,
-        Email: req.Email,
-        // ...
+func (h *HTTPHandler) createEmployee(w http.ResponseWriter, r *http.Request) {
+    claims, _ := authn.FromContext(r.Context())
+    var body createEmployeeBody
+    if !httpx.DecodeJSON(w, r, &body, maxBody) {
+        return
+    }
+    result, err := h.create.Handle(r.Context(), commands.CreateEmployeeCommand{
+        TenantID: claims.TenantID, // from the token, never from the body
+        Email:    body.Email,
     })
     if err != nil {
-        return nil, grpcError(err)
+        h.writeErr(w, r, err)
+        return
     }
-    return &pb.EmployeeResponse{...}, nil
-}
-```
-
-### Laravel Gateway
-
-**❌ FORBIDDEN: Business logic in controller**
-```php
-public function store(Request $request) {
-    $salary = $request->base * 1.13; // ❌ domain logic
-    Employee::create($request->all()); // ❌ raw DB access
-    return response()->json(['ok' => true]);
-}
-```
-
-**✅ CORRECT: Controller delegates to service**
-```php
-public function store(CreateEmployeeRequest $request) {
-    $employee = $this->employeeService->create($request->validated());
-    return response()->json(new EmployeeResource($employee));
+    httpx.WriteSuccess(w, http.StatusCreated, result)
 }
 ```
 
@@ -104,14 +90,14 @@ func (h *ListEmployeesHandler) Handle(ctx context.Context, query ListEmployeesQu
 
 ## Checklist for Each Layer
 
-### Domain Layer (internal/domain/)
-- [ ] No I/O (no DB, HTTP, gRPC, files)
+### Domain Layer (services/<name>/domain/)
+- [ ] No I/O (no DB, HTTP, files)
 - [ ] No external dependencies except stdlib + value objects
 - [ ] Pure business logic only
 - [ ] Aggregates, value objects, domain events
 - [ ] Invariants enforced
 
-### Application Layer (internal/application/)
+### Application Layer (services/<name>/application/)
 - [ ] Orchestrates domain and infrastructure
 - [ ] Commands (write side) and Queries (read side)
 - [ ] Calls domain methods and repository interfaces
@@ -119,28 +105,27 @@ func (h *ListEmployeesHandler) Handle(ctx context.Context, query ListEmployeesQu
 - [ ] Publishes domain events
 - [ ] No direct DB queries (via repositories only)
 
-### Infrastructure Layer (internal/infrastructure/)
+### Infrastructure Layer (services/<name>/infrastructure/)
 - [ ] Implements repository interfaces
-- [ ] Handles I/O: DB, cache, NATS, HTTP calls
+- [ ] Handles I/O: DB, cache, event stream
 - [ ] No business logic, only data access and formatting
 - [ ] RLS context injection (WithTenantTx)
 - [ ] Error mapping for domain errors
 
-### Interface Layer (internal/interfaces/)
-- [ ] gRPC handlers (services/*/internal/interfaces/grpc/)
-- [ ] Laravel controllers (gateway/app/Http/Controllers/)
-- [ ] Request validation only
+### HTTP adapter (services/<name>/http.go)
+- [ ] Routes registered on `*http.ServeMux` with `"VERB /api/v1/..."` patterns
+- [ ] Request decoding and validation of shape only (`httpx.DecodeJSON`)
+- [ ] Tenant and actor ids from `authn.FromContext`
 - [ ] Delegates to application layer
-- [ ] Error mapping to protocol format (gRPC status codes, HTTP status)
-- [ ] Maximum 20 lines of logic per endpoint (Laravel rule)
+- [ ] Error mapping to HTTP status, answers through `httpx.WriteSuccess` / `httpx.WriteError`
 
 ## Examples
 
 **Trigger:** "Add validation to CreateEmployee"
-→ Put validation in application layer (CreateEmployeeHandler), not gRPC handler
+→ Put validation in application layer (CreateEmployeeHandler), not the HTTP handler
 
 **Trigger:** "Filter employees by department"
 → Put filter in query handler, not repository
 
 **Trigger:** "Calculate employee tax"
-→ Put calculation in domain (Employee aggregate), not controller
+→ Put calculation in domain (Employee aggregate), not the HTTP handler

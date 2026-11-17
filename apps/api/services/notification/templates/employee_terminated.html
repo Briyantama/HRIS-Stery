@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+        .content { padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .footer { margin-top: 20px; font-size: 12px; color: #666; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Employment Status Update</h1>
+        </div>
+        <div class="content">
+            <p>Hi {{.RecipientName}},</p>
+            <p>Please note that your employment with the company has been terminated.</p>
+
+            <h3>Employment Details:</h3>
+            <ul>
+                <li><strong>Last Working Day:</strong> {{.LastWorkingDay}}</li>
+                <li><strong>Termination Reason:</strong> {{.TerminationReason}}</li>
+                <li><strong>Separation Date:</strong> {{.SeparationDate}}</li>
+            </ul>
+
+            <h3>Next Steps:</h3>
+            <ul>
+                <li>Your HRIS system access will be deactivated on your last working day</li>
+                <li>Please ensure all company equipment is returned</li>
+                <li>Your final settlement details will be communicated separately</li>
+                <li>For any questions, please contact HR</li>
+            </ul>
+
+            <p>We appreciate your service and wish you the best in your future endeavors.</p>
+
+            <a href="{{.OffboardingLink}}" class="button">View Offboarding Checklist</a>
+        </div>
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; 2026 HRIS System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

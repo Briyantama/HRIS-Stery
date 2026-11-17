@@ -5,38 +5,42 @@ globs: ["**/*"]
 
 # HRIS-Stery System Rules
 
-## Architecture Hierarchy
+## Architecture
 
+```text
+SvelteKit (apps/web) -> REST/JSON /api/v1 -> Go API (apps/api, one binary, port 8000)
+                                              services are packages, called in-process
+                                              -> PostgreSQL 18 (one schema per service, RLS)
+                                              -> Dragonfly (refresh tokens, stream hris:events)
+                                              -> S3-compatible storage (RustFS locally)
 ```
-SvelteKit → REST/JSON → Laravel Gateway → HTTP/JSON (grpc-gateway) → Go Services
-                                                                   ↔ gRPC (service-to-service)
-                                                                   → NATS JetStream (events)
-```
 
-## Non-Negotiable Rules
+## Non-negotiable rules
 
-- Clean Architecture: domain → application → infrastructure → interfaces. Never invert.
-- Services never query another service's database schema. Cross-service data goes through gRPC only.
-- Every table with `tenant_id` must have PostgreSQL RLS enabled (see ADR-0002).
-- Every NATS consumer must implement the idempotency table pattern (see ADR-0003).
-- Business logic lives in `internal/application/`. Never in handlers, controllers, or repositories.
-- Phase 2 features (payroll, recruitment, performance) are blocked — see ADR-0004.
+- Layers: domain -> application -> infrastructure -> http.go. Never invert.
+- A service never queries another service's schema. It calls the other package's exported application handler or consumes its events.
+- Every table with `tenant_id` has PostgreSQL RLS enabled (ADR-0002).
+- Every event consumer has a processed-events idempotency table, and events are published after the DB commit (ADR-0006).
+- Business logic lives in `services/<name>/application/`. Never in `http.go` or repositories.
+- Phase 2 features (payroll, tax rules, recruitment, performance) are blocked (ADR-0004). Their routes, if added, return 501.
 
-## ADR Index
+## ADR index
 
-- ADR-0001: grpc-gateway over gRPC-PHP
-- ADR-0002: PostgreSQL RLS for tenant isolation
-- ADR-0003: NATS JetStream event backbone
-- ADR-0004: Defer payroll/recruitment/performance to Phase 2
+- ADR-0001: grpc-gateway over gRPC-PHP (superseded by ADR-0005)
+- ADR-0002: PostgreSQL RLS for tenant isolation (amended 2026-11-08)
+- ADR-0003: NATS JetStream event backbone (superseded by ADR-0006)
+- ADR-0004: Defer payroll, recruitment and performance to Phase 2
+- ADR-0005: Single-module Go API on the SELA stack
+- ADR-0006: Dragonfly Streams as the event backbone (ADR-0003 superseded)
 
-## Event Envelope (mandatory for all NATS publishes)
+## Event envelope (every publish to `hris:events`)
 
 ```json
 { "event_id": "uuid-v7", "event_type": "hris.domain.entity.verb",
   "schema_version": 1, "tenant_id": "...", "actor_id": "...",
-  "occurred_at": "ISO-8601", "payload": {} }
+  "occurred_at": "RFC 3339", "payload": {} }
 ```
 
-## Comment Policy
+## Comment policy
 
-Write comments only when the WHY is non-obvious. Never explain WHAT the code does.
+Write comments only when the reason is non-obvious. Never explain what the code does.
