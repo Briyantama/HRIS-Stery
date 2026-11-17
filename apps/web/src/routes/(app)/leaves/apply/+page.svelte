@@ -79,7 +79,7 @@
 			}
 		}
 
-		fieldErrors = fieldErrors; // Trigger reactivity
+		fieldErrors = { ...fieldErrors }; // Trigger reactivity (legacy mode: mutations above need a new reference)
 	}
 
 	/**

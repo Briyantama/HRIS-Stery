@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint .",
+    "lint": "oxlint src && eslint .",
     "format": "prettier --write .",
     "test:unit": "vitest run",
     "test:e2e": "playwright test"
@@ -17,6 +17,8 @@
     "node": ">=20.19"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@lucide/svelte": "^1.70.0",
     "@playwright/test": "^1.63.0",
     "@sveltejs/adapter-auto": "^7.0.1",
     "@sveltejs/kit": "^2.63.0",
@@ -29,7 +31,7 @@
     "eslint": "^9.17.0",
     "eslint-plugin-svelte": "^3.24.1",
     "globals": "^15.14.0",
-    "@lucide/svelte": "^1.70.0",
+    "oxlint": "^1.92",
     "prettier": "^3.4.2",
     "prettier-plugin-svelte": "^3.3.2",
     "svelte": "^5.56.1",
@@ -38,8 +40,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.0.16",
-    "vitest": "^4.1.11",
-    "@eslint/js": "^9.39.1"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@stery/kit": "file:../../../stery-kit/web",
